@@ -36,3 +36,11 @@
 .setting-row .toggle-enabled{width:auto;min-width:58px;margin:0;padding:7px 10px;border:1px solid #00ff00;background:#000;color:#00ff00;cursor:pointer;font:inherit;white-space:nowrap}
 .setting-row .toggle-enabled.is-enabled{color:#ffff00;border-color:#ffff00}
 .setting-row .toggle-enabled.is-disabled{color:#777;border-color:#777}
+
+/* 聊天顶部模型选择器修复：避免原生 select 被压缩或只显示箭头 */
+.chat-header .model-select-wrap{display:flex!important;flex:0 1 auto;align-items:center;min-width:300px;max-width:520px;gap:10px}
+.chat-header .model-select-wrap .model-symbol{flex:0 0 38px}
+.chat-header .model-select-wrap select#model{display:block!important;flex:1 1 auto;width:250px!important;min-width:250px!important;height:42px;margin:0;padding:8px 34px 8px 10px;border:1px solid #00ff00!important;border-radius:0!important;background:#000!important;color:#00ff00!important;font:16px/24px Consolas,"Courier New",monospace!important;appearance:none;-webkit-appearance:none;-moz-appearance:none;text-overflow:ellipsis;overflow:hidden}
+.chat-header .model-select-wrap select#model option{background:#000;color:#00ff00;font:16px Consolas,"Courier New",monospace}
+.chat-header .model-select-wrap .chevron{display:block;flex:0 0 auto;margin-left:-36px;z-index:2;color:#ffff00;font-size:18px;pointer-events:none}
+@media(max-width:800px){.chat-header .model-select-wrap{min-width:0;max-width:calc(100vw - 80px)}.chat-header .model-select-wrap select#model{width:190px!important;min-width:120px!important;font-size:14px!important}}
