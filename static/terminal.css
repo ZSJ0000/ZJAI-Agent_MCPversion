@@ -61,3 +61,7 @@
 
 /* 开启新对话按钮不显示下划线 */
 .new-chat{text-decoration:none!important}
+
+/* 新增 API 必须先确认 */
+.setting-row .confirm{width:auto;margin:0;padding:7px 10px;border:1px solid #00ffff;background:#000;color:#00ffff;cursor:pointer;font:13px Consolas,"Courier New",monospace;white-space:nowrap}
+.setting-row .confirm:hover{background:#003300;color:#fff}.setting-row .confirm.confirmed{color:#777;border-color:#777;cursor:default}
