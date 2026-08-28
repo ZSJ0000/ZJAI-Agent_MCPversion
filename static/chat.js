@@ -1,1 +1,184 @@
-(function(){var model=document.getElementById('model'),box=document.getElementById('messages'),list=document.getElementById('sessions'),input=document.getElementById('input'),status=document.getElementById('status'),panel=document.getElementById('conversation-panel'),sid=null,busy=false;function clear(){box.innerHTML='';var e=document.createElement('div');e.id='empty-state';e.className='empty-state';e.innerHTML='<div class="empty-logo">Z</div><h1>有什么可以帮忙？</h1>';box.appendChild(e)}function add(role,text){var e=document.getElementById('empty-state');if(e)e.remove();var d=document.createElement('div');d.className='message '+(role==='用户'?'user-message':'assistant-message');var w=document.createElement('div');w.className='message-role';w.textContent=role;var b=document.createElement('div');b.className='message-content';b.textContent=text||'';d.appendChild(w);d.appendChild(b);box.appendChild(d);return b}function loading(){var b=add('助手','');b.className+=' reply-loading';b.innerHTML='<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>';return b}function openSession(id){sid=id;box.innerHTML='';fetch('/api/sessions/'+encodeURIComponent(id)).then(function(r){return r.json()}).then(function(x){(x.messages||[]).forEach(function(m){add(m.role==='user'?'用户':'助手',m.content)});mark()})}function mark(){document.querySelectorAll('.session-item').forEach(function(e){e.classList.toggle('selected',e.dataset.id===sid)})}function loadSessions(){fetch('/api/sessions').then(function(r){return r.json()}).then(function(x){list.innerHTML='';(x.sessions||[]).sort(function(a,b){return(b.updated_at||'').localeCompare(a.updated_at||'')}).forEach(function(s){var row=document.createElement('div');row.className='session-row';var b=document.createElement('button');b.className='session-item'+(s.id===sid?' selected':'');b.dataset.id=s.id;b.textContent=s.title||'新会话';b.onclick=function(){openSession(s.id);panel.classList.remove('mobile-open')};row.appendChild(b);list.appendChild(row)})})}function send(){if(busy)return;var text=input.value.trim();if(!text)return;busy=true;status.textContent='● 模型正在回复';add('用户',text);var reply=loading();input.value='';fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,model_id:model.value,session_id:sid})}).then(function(r){if(r.status===409)return r.json().then(function(x){throw new Error(x.error)});if(!r.ok)throw new Error('后端请求失败');var reader=r.body.getReader(),decoder=new TextDecoder('utf-8'),buffer='';function read(){return reader.read().then(function(x){if(x.done)return;buffer+=decoder.decode(x.value,{stream:true});var parts=buffer.split('\n\n');buffer=parts.pop();parts.forEach(function(part){part.split('\n').forEach(function(line){if(line.indexOf('data: ')===0){var obj=JSON.parse(line.slice(6));if(obj.type==='delta'){if(reply.className.indexOf('reply-loading')>=0){reply.className=reply.className.replace('reply-loading','');reply.textContent=''}reply.textContent+=obj.content;box.scrollTop=box.scrollHeight}if(obj.type==='done'&&obj.session_id){sid=obj.session_id;loadSessions()}if(obj.type==='error')throw new Error(obj.error)}})});return read()}return read()}).catch(function(e){reply.className=reply.className.replace('reply-loading','');reply.textContent='错误：'+e.message;status.textContent='● 异常'}).then(function(){if(status.textContent!=='● 异常')status.textContent='● 就绪';busy=false})}fetch('/api/models').then(function(r){return r.json()}).then(function(x){var items=x.models||[];model.innerHTML='';if(!items.length){var empty=document.createElement('option');empty.value='';empty.textContent='未配置模型';model.appendChild(empty);return}items.forEach(function(v){var o=document.createElement('option');o.value=v.id;o.textContent=v.name||v.id;if(v.default)o.selected=true;model.appendChild(o)});if(!model.value&&model.options.length)model.selectedIndex=0}).catch(function(){model.innerHTML='<option value="">模型加载失败</option>'});document.getElementById('new').onclick=function(e){e.preventDefault();sid=null;clear();mark();input.focus()};document.getElementById('refresh').onclick=loadSessions;document.getElementById('mobile-menu').onclick=function(){panel.classList.toggle('mobile-open')};document.getElementById('logout').onclick=function(){fetch('/logout',{method:'POST',redirect:'manual'}).then(function(){location='/login'})};input.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});document.getElementById('form').onsubmit=function(e){e.preventDefault();send()};loadSessions()})();
+(function () {
+  var model = document.getElementById('model');
+  var box = document.getElementById('messages');
+  var list = document.getElementById('sessions');
+  var input = document.getElementById('input');
+  var status = document.getElementById('status');
+  var panel = document.getElementById('conversation-panel');
+  var sid = null;
+  var busy = false;
+
+  function json(url, options) {
+    return fetch(url, options).then(function (r) {
+      return r.json().then(function (data) {
+        if (!r.ok) throw new Error(data.error || '请求失败');
+        return data;
+      });
+    });
+  }
+
+  function clearMessages() {
+    box.innerHTML = '<div id="empty-state" class="empty-state"><div class="empty-logo">Z</div><h1>有什么可以帮忙？</h1></div>';
+  }
+
+  function addMessage(role, text) {
+    var empty = document.getElementById('empty-state');
+    if (empty) empty.remove();
+    var item = document.createElement('div');
+    item.className = 'message ' + (role === '用户' ? 'user-message' : 'assistant-message');
+    var who = document.createElement('div');
+    who.className = 'message-role';
+    who.textContent = role;
+    var content = document.createElement('div');
+    content.className = 'message-content';
+    content.textContent = text || '';
+    item.appendChild(who);
+    item.appendChild(content);
+    box.appendChild(item);
+    box.scrollTop = box.scrollHeight;
+    return content;
+  }
+
+  function loadingMessage() {
+    var content = addMessage('助手', '');
+    content.className += ' reply-loading';
+    content.innerHTML = '<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>';
+    return content;
+  }
+
+  function markSelected() {
+    Array.prototype.forEach.call(document.querySelectorAll('.session-item'), function (item) {
+      item.classList.toggle('selected', item.dataset.id === sid);
+    });
+  }
+
+  function openSession(id) {
+    sid = id;
+    box.innerHTML = '';
+    json('/api/sessions/' + encodeURIComponent(id)).then(function (data) {
+      (data.messages || []).forEach(function (message) {
+        addMessage(message.role === 'user' ? '用户' : '助手', message.content);
+      });
+      markSelected();
+    }).catch(function (error) {
+      addMessage('助手', '错误：' + error.message);
+    });
+  }
+
+  function loadSessions() {
+    json('/api/sessions').then(function (data) {
+      list.innerHTML = '';
+      (data.sessions || []).sort(function (a, b) {
+        return (b.updated_at || '').localeCompare(a.updated_at || '');
+      }).forEach(function (item) {
+        var row = document.createElement('div');
+        row.className = 'session-row';
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'session-item' + (item.id === sid ? ' selected' : '');
+        button.dataset.id = item.id;
+        button.textContent = item.title || '新会话';
+        button.onclick = function () {
+          openSession(item.id);
+          panel.classList.remove('mobile-open');
+        };
+        row.appendChild(button);
+        list.appendChild(row);
+      });
+    });
+  }
+
+  function readStream(response, reply) {
+    var reader = response.body.getReader();
+    var decoder = new TextDecoder('utf-8');
+    var buffer = '';
+    function read() {
+      return reader.read().then(function (result) {
+        if (result.done) return;
+        buffer += decoder.decode(result.value, { stream: true });
+        var events = buffer.split('\n\n');
+        buffer = events.pop();
+        events.forEach(function (event) {
+          event.split('\n').forEach(function (line) {
+            if (line.indexOf('data: ') !== 0) return;
+            var data = JSON.parse(line.slice(6));
+            if (data.type === 'delta') {
+              if (reply.classList.contains('reply-loading')) {
+                reply.classList.remove('reply-loading');
+                reply.textContent = '';
+              }
+              reply.textContent += data.content || '';
+              box.scrollTop = box.scrollHeight;
+            } else if (data.type === 'done') {
+              sid = data.session_id || sid;
+              loadSessions();
+            } else if (data.type === 'error') {
+              throw new Error(data.error || '流式响应失败');
+            }
+          });
+        });
+        return read();
+      });
+    }
+    return read();
+  }
+
+  function send() {
+    if (busy) return;
+    var text = input.value.trim();
+    if (!text || !model.value) return;
+    busy = true;
+    status.textContent = '● 模型正在回复';
+    addMessage('用户', text);
+    var reply = loadingMessage();
+    input.value = '';
+    fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, model_id: model.value, session_id: sid })
+    }).then(function (response) {
+      if (!response.ok) return response.json().then(function (data) { throw new Error(data.error || '后端请求失败'); });
+      return readStream(response, reply);
+    }).catch(function (error) {
+      reply.classList.remove('reply-loading');
+      reply.textContent = '错误：' + error.message;
+      status.textContent = '● 异常';
+    }).then(function () {
+      if (status.textContent !== '● 异常') status.textContent = '● 就绪';
+      busy = false;
+    });
+  }
+
+  fetch('/api/models').then(function (r) { return r.json(); }).then(function (data) {
+    var items = data.models || [];
+    model.innerHTML = '';
+    if (!items.length) {
+      model.innerHTML = '<option value="">未配置模型</option>';
+      return;
+    }
+    items.forEach(function (item) {
+      var option = document.createElement('option');
+      option.value = item.id;
+      option.textContent = item.name || item.id;
+      option.selected = !!item.default;
+      model.appendChild(option);
+    });
+    if (!model.value) model.selectedIndex = 0;
+  }).catch(function () {
+    model.innerHTML = '<option value="">模型加载失败</option>';
+  });
+
+  document.getElementById('new').onclick = function (event) {
+    event.preventDefault(); sid = null; clearMessages(); markSelected(); input.focus();
+  };
+  document.getElementById('refresh').onclick = loadSessions;
+  document.getElementById('mobile-menu').onclick = function () { panel.classList.toggle('mobile-open'); };
+  document.getElementById('logout').onclick = function () {
+    fetch('/logout', { method: 'POST', redirect: 'manual' }).then(function () { location = '/login'; });
+  };
+  input.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(); }
+  });
+  document.getElementById('form').onsubmit = function (event) { event.preventDefault(); send(); };
+  loadSessions();
+}());
