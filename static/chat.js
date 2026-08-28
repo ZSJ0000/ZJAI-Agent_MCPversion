@@ -136,6 +136,11 @@
           openSession(item.id);
           panel.classList.remove('mobile-open');
         };
+        button.ondblclick = function () {
+          var title = window.prompt('重命名会话', item.title || '新会话');
+          if (!title || !title.trim()) return;
+          json('/api/sessions/' + encodeURIComponent(item.id), {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:title.trim()})}).then(loadSessions);
+        };
         row.appendChild(button);
         list.appendChild(row);
       });
