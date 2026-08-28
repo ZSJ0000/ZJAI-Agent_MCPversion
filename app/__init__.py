@@ -1,9 +1,9 @@
-import os
-from flask import Flask, redirect, session, request, jsonify, render_template
+import os, json
+from flask import Flask, redirect, session, request, jsonify, render_template, Response, stream_with_context
 from .config import SECRET_KEY
 from .services.json_store import ensure_dirs, save_config, config
 from .services.auth_service import initialized, authenticate, create_user, users, public_user, set_enabled
-from .services.model_service import models, run
+from .services.model_service import models, run, stream
 from .services.skill_service import load_skills
 from .services.mcp_service import list_tools
 from .services.session_service import create, owned, list_owned, get_messages, add_message, delete
@@ -75,6 +75,25 @@ def create_app():
         return (jsonify(session=s,messages=get_messages(sid)) if s else (jsonify(error='会话不存在'),404))
     @app.delete('/api/sessions/<sid>')
     def api_session_delete(sid): return (jsonify(success=delete(uid(),sid)) if owned(uid(),sid) else (jsonify(error='会话不存在'),404))
+    @app.post('/api/chat/stream')
+    def api_chat_stream():
+        if not uid(): return jsonify(error='未登录'),401
+        x=request.get_json(silent=True) or {}; text=(x.get('message') or '').strip(); s=owned(uid(),x.get('session_id')) if x.get('session_id') else create(uid())
+        if not s:return jsonify(error='会话不存在'),404
+        if not text:return jsonify(error='消息不能为空'),400
+        add_message(s['id'],'user',text)
+        try:
+            chunks=stream(x.get('model_id'),[{'role':m['role'],'content':m['content']} for m in get_messages(s['id'])])
+            if chunks is None: return jsonify(error='当前会话包含 MCP 工具，使用普通响应模式',session_id=s['id']),409
+        except Exception as e:return jsonify(error=str(e),session_id=s['id']),502
+        def generate():
+            parts=[]
+            try:
+                for chunk in chunks:
+                    parts.append(chunk); yield 'data: '+json.dumps({'type':'delta','content':chunk},ensure_ascii=False)+'\n\n'
+                content=''.join(parts); add_message(s['id'],'assistant',content); yield 'data: '+json.dumps({'type':'done','session_id':s['id]},ensure_ascii=False)+'\n\n'
+            except Exception as e: yield 'data: '+json.dumps({'type':'error','error':str(e)},ensure_ascii=False)+'\n\n'
+        return Response(stream_with_context(generate()),mimetype='text/event-stream',headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
     @app.post('/api/chat')
     def api_chat():
         if not uid(): return jsonify(error='未登录'),401
