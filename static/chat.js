@@ -21,6 +21,38 @@
     box.innerHTML = '<div id="empty-state" class="empty-state"><div class="empty-logo">Z</div><h1>有什么可以帮忙？</h1></div>';
   }
 
+  function escapeHtml(value) {
+    return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function renderMarkdown(value) {
+    var source = escapeHtml(value);
+    var blocks = [];
+    source = source.replace(/```([\w.+-]*)\n?([\s\S]*?)```/g, function (_, lang, code) {
+      var label = lang ? '<span class=\"code-lang\">' + lang + '</span>' : '';
+      blocks.push('<pre class=\"code-block\">' + label + '<code>' + code.replace(/^\n|\n$/g, '') + '</code></pre>');
+      return '\n\x00CODE' + (blocks.length - 1) + '\x00\n';
+    });
+    source = source.replace(/^###### (.+)$/gm, '<h6>$1</h6>')
+      .replace(/^##### (.+)$/gm, '<h5>$1</h5>')
+      .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/^\s*[-*] (.+)$/gm, '<span class=\"md-list\">• $1</span>')
+      .replace(/^\s*(\d+)\. (.+)$/gm, '<span class=\"md-list\">$1. $2</span>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code class=\"inline-code\">$1</code>')
+      .replace(/\n/g, '<br>');
+    source = source.replace(/\x00CODE(\d+)\x00/g, function (_, index) { return blocks[Number(index)]; });
+    return source;
+  }
+
+  function setRendered(content, raw) {
+    content.dataset.raw = raw || '';
+    content.innerHTML = renderMarkdown(raw || '');
+  }
+
   function addMessage(role, text) {
     var empty = document.getElementById('empty-state');
     if (empty) empty.remove();
@@ -31,7 +63,7 @@
     who.textContent = role;
     var content = document.createElement('div');
     content.className = 'message-content';
-    content.textContent = text || '';
+    setRendered(content, text || '');
     item.appendChild(who);
     item.appendChild(content);
     box.appendChild(item);
@@ -92,31 +124,38 @@
     var reader = response.body.getReader();
     var decoder = new TextDecoder('utf-8');
     var buffer = '';
+    function processEvent(event) {
+      var lines = event.replace(/\r/g, '').split('\n');
+      var payload = [];
+      lines.forEach(function (line) { if (line.indexOf('data:') === 0) payload.push(line.slice(5).replace(/^ /, '')); });
+      if (!payload.length) return;
+      var raw = payload.join('\n');
+      if (raw === '[DONE]') return;
+      var data = JSON.parse(raw);
+      if (data.type === 'delta') {
+        if (reply.classList.contains('reply-loading')) {
+          reply.classList.remove('reply-loading');
+          setRendered(reply, '');
+        }
+        setRendered(reply, (reply.dataset.raw || '') + (data.content || ''));
+        box.scrollTop = box.scrollHeight;
+      } else if (data.type === 'done') {
+        sid = data.session_id || sid;
+        loadSessions();
+      } else if (data.type === 'error') {
+        throw new Error(data.error || '流式响应失败');
+      }
+    }
     function read() {
       return reader.read().then(function (result) {
-        if (result.done) return;
-        buffer += decoder.decode(result.value, { stream: true });
+        buffer += decoder.decode(result.value || new Uint8Array(0), { stream: !result.done });
         var events = buffer.split('\n\n');
         buffer = events.pop();
-        events.forEach(function (event) {
-          event.split('\n').forEach(function (line) {
-            if (line.indexOf('data: ') !== 0) return;
-            var data = JSON.parse(line.slice(6));
-            if (data.type === 'delta') {
-              if (reply.classList.contains('reply-loading')) {
-                reply.classList.remove('reply-loading');
-                reply.textContent = '';
-              }
-              reply.textContent += data.content || '';
-              box.scrollTop = box.scrollHeight;
-            } else if (data.type === 'done') {
-              sid = data.session_id || sid;
-              loadSessions();
-            } else if (data.type === 'error') {
-              throw new Error(data.error || '流式响应失败');
-            }
-          });
-        });
+        events.forEach(processEvent);
+        if (result.done) {
+          if (buffer.trim()) processEvent(buffer);
+          return;
+        }
         return read();
       });
     }
@@ -141,7 +180,7 @@
       return readStream(response, reply);
     }).catch(function (error) {
       reply.classList.remove('reply-loading');
-      reply.textContent = '错误：' + error.message;
+      setRendered(reply, '错误：' + error.message);
       status.textContent = '● 异常';
     }).then(function () {
       if (status.textContent !== '● 异常') status.textContent = '● 就绪';
