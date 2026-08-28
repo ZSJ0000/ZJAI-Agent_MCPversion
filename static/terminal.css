@@ -58,3 +58,6 @@
 .session-item{cursor:pointer}.session-item:active{background:#005500}
 
 .session-row{position:relative;display:flex;align-items:center}.session-row .session-item{flex:1;min-width:0}.session-more{width:42px!important;flex:0 0 42px;margin:3px 0!important;padding:7px 0!important;border:0!important;background:#000!important;color:#00ff00!important;font:16px Consolas,"Courier New",monospace!important;letter-spacing:2px;cursor:pointer}.session-more:hover{background:#003300!important;color:#fff!important}.session-menu{position:absolute;z-index:30;top:38px;right:0;width:130px;padding:0;border:1px solid #00ff00;background:#000}.session-menu button{display:block;width:100%;margin:0;padding:9px;border:0;border-bottom:1px solid #064;background:#000;color:#00ff00;text-align:left;font:13px Consolas,"Courier New",monospace;cursor:pointer}.session-menu button:last-child{border-bottom:0}.session-menu button:hover{background:#003300;color:#fff}
+
+/* 开启新对话按钮不显示下划线 */
+.new-chat{text-decoration:none!important}
