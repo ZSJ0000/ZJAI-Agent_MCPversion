@@ -5,6 +5,8 @@
   var list = document.getElementById('sessions');
   var input = document.getElementById('input');
   var status = document.getElementById('status');
+  function setStatus(text) { if (status) status.textContent = text; }
+  function getStatus() { return status ? status.textContent : ''; }
   var panel = document.getElementById('conversation-panel');
   var sid = null;
   var busy = false;
@@ -198,9 +200,9 @@
     if (busy) return;
     var text = input.value.trim();
     if (!text) return;
-    if (!model || !model.value) { status.textContent = '● 模型加载中，请稍候'; return; }
+    if (!model || !model.value) { setStatus('● 模型加载中，请稍候'); return; }
     busy = true;
-    status.textContent = '● 模型正在回复';
+    setStatus('● 模型正在回复');
     addMessage('用户', text);
     var reply = loadingMessage();
     input.value = '';
@@ -214,9 +216,9 @@
     }).catch(function (error) {
       reply.classList.remove('reply-loading');
       setRendered(reply, '错误：' + error.message);
-      status.textContent = '● 异常';
+      setStatus('● 异常');
     }).then(function () {
-      if (status.textContent !== '● 异常') status.textContent = '● 就绪';
+      if (getStatus() !== '● 异常') setStatus('● 就绪');
       busy = false;
     });
   }
@@ -286,11 +288,11 @@
     var file = this.files && this.files[0];
     if (!file) return;
     var allowed = /\.(txt|md|py|js|json|html|css|bat|sh|yaml|yml|xml|csv|ini|log)$/i.test(file.name);
-    if (!allowed) { status.textContent = '● 仅支持文本和代码文件'; this.value = ''; return; }
-    if (file.size > 1024 * 1024) { status.textContent = '● 文件不能超过 1 MB'; this.value = ''; return; }
+    if (!allowed) { setStatus('● 仅支持文本和代码文件'); this.value = ''; return; }
+    if (file.size > 1024 * 1024) { setStatus('● 文件不能超过 1 MB'); this.value = ''; return; }
     var reader = new FileReader();
-    reader.onload = function () { input.value += (input.value ? '\n\n' : '') + '[文件: ' + file.name + ']\n' + reader.result; input.focus(); status.textContent = '● 已载入 ' + file.name; };
-    reader.onerror = function () { status.textContent = '● 文件读取失败'; };
+    reader.onload = function () { input.value += (input.value ? '\n\n' : '') + '[文件: ' + file.name + ']\n' + reader.result; input.focus(); setStatus('● 已载入 ' + file.name); };
+    reader.onerror = function () { setStatus('● 文件读取失败'); };
     reader.readAsText(file, 'utf-8');
     this.value = '';
   };
