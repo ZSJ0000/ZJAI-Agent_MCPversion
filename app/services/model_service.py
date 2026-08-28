@@ -26,7 +26,7 @@ def stream(model_id,messages):
     m=_model(model_id); ts=list_tools()
     if ts: return None
     body=_body(m,messages,True); headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json','Accept':'text/event-stream'}
-    r=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120,stream=True);r.raise_for_status()
+    r=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120,stream=True);r.raise_for_status();r.encoding='utf-8'
     for raw in r.iter_lines(decode_unicode=True):
         line=(raw or '').strip()
         if not line or line.startswith(':'):continue
