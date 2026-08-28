@@ -22,7 +22,9 @@ def create_app():
         if request.method=='POST':
             u=request.form.get('username','').strip(); p=request.form.get('password',''); c=request.form.get('confirm','')
             if not u or len(p)<6 or p!=c:return render_template('setup.html',error='账号不能为空，密码至少6位且两次必须一致')
-            create_user(u,p,'admin'); save_config('app.json',{'name':'ZJAI-Agent_MCPversion','initialized':True}); save_config('models.json',{'models':[]}); save_config('mcp.json',{'servers':[]}); return redirect('/login')
+            create_user(u,p,'admin'); save_config('app.json',{'name':'ZJAI-Agent_MCPversion','initialized':True}); save_config('models.json',{'models':[{'id':'default','name':request.form.get('model_name','默认模型'),'base_url':request.form.get('base_url','').strip(),'api_key':request.form.get('api_key',''),'model':request.form.get('model',''),'enabled':bool(request.form.get('base_url','').strip()),'default':True}]}); murl=request.form.get('mcp_url','').strip(); headers={}; token=request.form.get('mcp_token','').strip();
+            if token: headers['Authorization']='Bearer '+token
+            save_config('mcp.json',{'servers':[{'id':'default','name':'默认 MCP','protocol':request.form.get('mcp_protocol','streamable_http'),'url':murl,'enabled':bool(murl),'verify_ssl':True,'headers':headers}]}); return redirect('/login')
         return render_template('setup.html')
     @app.route('/login',methods=['GET','POST'])
     def login():
@@ -33,6 +35,8 @@ def create_app():
         return render_template('login.html')
     @app.post('/logout')
     def logout(): session.clear(); return redirect('/login')
+    @app.get('/settings')
+    def settings_page(): return render_template('settings.html',user=session['user']) if uid() else redirect('/login')
     @app.get('/chat')
     def chat_page(): return render_template('chat.html',user=session['user']) if uid() else redirect('/login')
     @app.get('/api/models')
