@@ -1,3 +1,4 @@
+import os
 from flask import Flask, redirect, session, request, jsonify, render_template
 from .config import SECRET_KEY
 from .services.json_store import ensure_dirs, save_config, config
@@ -40,7 +41,7 @@ def create_app():
                     headers={}
                     if values.get('mcp_token'): headers['Authorization']='Bearer '+values['mcp_token']
                     save_config('mcp.json',{'servers':[{'id':'default','name':'默认 MCP','protocol':values['mcp_protocol'],'url':values['mcp_url'],'enabled':bool(values['mcp_url']),'verify_ssl':True,'headers':headers}]})
-                    save_config('app.json',{'name':values['site_name'],'theme':values['theme'],'welcome_message':values['welcome_message'],'initialized':True}); session.pop('setup_values',None); return redirect('/login')
+                    save_config('app.json',{'name':values['site_name'],'theme':values['theme'],'welcome_message':values['welcome_message'],'initialized':True}); from .services.json_store import write; from .config import DATA_DIR; write(os.path.join(DATA_DIR,'install.lock'),{'initialized':True}); session.pop('setup_values',None); return redirect('/login')
                 except Exception as e: error=str(e)
             if error: return render_template('setup_step.html',step=step,values=values,error=error)
             return redirect('/setup/'+str(step+1)) if step<4 else redirect('/login')
