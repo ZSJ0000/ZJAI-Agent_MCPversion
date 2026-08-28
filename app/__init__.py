@@ -114,6 +114,16 @@ def create_app():
         return (jsonify(session=s,messages=get_messages(sid)) if s else (jsonify(error='会话不存在'),404))
     @app.delete('/api/sessions/<sid>')
     def api_session_delete(sid): return (jsonify(success=delete(uid(),sid)) if owned(uid(),sid) else (jsonify(error='会话不存在'),404))
+    @app.put('/api/sessions/<sid>')
+    def api_session_rename(sid):
+        current=owned(uid(),sid)
+        if not current:return jsonify(error='会话不存在'),404
+        x=request.get_json(silent=True) or {}; title=str(x.get('title') or '').strip()
+        if not title:return jsonify(error='标题不能为空'),400
+        sessions=data('sessions.json',[])
+        for item in sessions:
+            if item.get('id')==sid: item['title']=title[:100]; current=item; break
+        save_data('sessions.json',sessions); return jsonify(session=current)
     @app.post('/api/chat/stream')
     def api_chat_stream():
         if not uid(): return jsonify(error='未登录'), 401
