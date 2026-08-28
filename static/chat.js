@@ -196,7 +196,8 @@
   function send() {
     if (busy) return;
     var text = input.value.trim();
-    if (!text || !model.value) return;
+    if (!text) return;
+    if (!model.value) { status.textContent = '● 请先配置并选择模型'; return; }
     busy = true;
     status.textContent = '● 模型正在回复';
     addMessage('用户', text);
@@ -261,6 +262,20 @@
     var isEnter = event.key === 'Enter' || event.keyCode === 13 || event.which === 13;
     if (isEnter && !event.shiftKey && !event.isComposing) { event.preventDefault(); return false; }
   });
+  document.getElementById('attach').onclick = function () { document.getElementById('file-input').click(); };
+  document.getElementById('file-input').onchange = function () {
+    var file = this.files && this.files[0];
+    if (!file) return;
+    var allowed = /\.(txt|md|py|js|json|html|css|bat|sh|yaml|yml|xml|csv|ini|log)$/i.test(file.name);
+    if (!allowed) { status.textContent = '● 仅支持文本和代码文件'; this.value = ''; return; }
+    if (file.size > 1024 * 1024) { status.textContent = '● 文件不能超过 1 MB'; this.value = ''; return; }
+    var reader = new FileReader();
+    reader.onload = function () { input.value += (input.value ? '\n\n' : '') + '[文件: ' + file.name + ']\n' + reader.result; input.focus(); status.textContent = '● 已载入 ' + file.name; };
+    reader.onerror = function () { status.textContent = '● 文件读取失败'; };
+    reader.readAsText(file, 'utf-8');
+    this.value = '';
+  };
+  document.getElementById('send-button').onclick = function (event) { event.preventDefault(); send(); };
   document.getElementById('form').addEventListener('submit', function (event) {
     event.preventDefault();
     send();
