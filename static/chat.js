@@ -248,8 +248,23 @@
     fetch('/logout', { method: 'POST', redirect: 'manual' }).then(function () { location = '/login'; });
   };
   input.addEventListener('keydown', function (event) {
-    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(); }
+    // keyCode/which keeps Enter working in older Windows 7 browsers.
+    var isEnter = event.key === 'Enter' || event.keyCode === 13 || event.which === 13;
+    if (isEnter && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.isComposing) {
+      event.preventDefault();
+      event.stopPropagation();
+      send();
+      return false;
+    }
   });
-  document.getElementById('form').onsubmit = function (event) { event.preventDefault(); send(); };
+  input.addEventListener('keypress', function (event) {
+    var isEnter = event.key === 'Enter' || event.keyCode === 13 || event.which === 13;
+    if (isEnter && !event.shiftKey && !event.isComposing) { event.preventDefault(); return false; }
+  });
+  document.getElementById('form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    send();
+    return false;
+  });
   loadSessions();
 }());
