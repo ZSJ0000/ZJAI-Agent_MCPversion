@@ -44,3 +44,9 @@
 .chat-header .model-select-wrap select#model option{background:#000;color:#00ff00;font:16px Consolas,"Courier New",monospace}
 .chat-header .model-select-wrap .chevron{display:block;flex:0 0 auto;margin-left:-36px;z-index:2;color:#ffff00;font-size:18px;pointer-events:none}
 @media(max-width:800px){.chat-header .model-select-wrap{min-width:0;max-width:calc(100vw - 80px)}.chat-header .model-select-wrap select#model{width:190px!important;min-width:120px!important;font-size:14px!important}}
+
+/* Markdown 输出 */
+.message-content h1,.message-content h2,.message-content h3,.message-content h4,.message-content h5,.message-content h6{margin:12px 0 8px;border:0;color:#00ffff;font-weight:normal}
+.message-content .md-list{display:block;padding-left:12px}.message-content strong{color:#ffff00;font-weight:bold}.inline-code{padding:1px 4px;border:1px solid #064;color:#00ffff}
+.code-block{position:relative;margin:12px 0;padding:28px 12px 12px;border:1px solid #00aa44;background:#020602;color:#00ff00;overflow:auto;white-space:pre;font:14px/1.55 Consolas,"Courier New",monospace}
+.code-lang{position:absolute;top:5px;left:10px;color:#ffff00;font-size:12px}
