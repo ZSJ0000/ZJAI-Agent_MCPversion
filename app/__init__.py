@@ -147,7 +147,7 @@ def create_app():
                 yield 'data: '+json.dumps({'type':'done','session_id':current['id']}, ensure_ascii=False)+'\n\n'
             except Exception as exc:
                 yield 'data: '+json.dumps({'type':'error','error':str(exc)}, ensure_ascii=False)+'\n\n'
-        return Response(stream_with_context(generate()), mimetype='text/event-stream', headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
+        return Response(stream_with_context(generate()), mimetype='text/event-stream', headers={'Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no','Connection':'keep-alive'})
 
     @app.post('/api/chat')
     def api_chat():
