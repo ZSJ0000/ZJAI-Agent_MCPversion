@@ -9,7 +9,16 @@ def owned(owner_id,sid): return next((s for s in all_sessions() if s.get('id')==
 def list_owned(owner_id): return [s for s in all_sessions() if s.get('owner_id')==str(owner_id)]
 def get_messages(sid): return [m for m in messages() if m.get('session_id')==sid]
 def add_message(sid,role,content,meta=None):
-    a=messages(); m={'id':uuid.uuid4().hex,'session_id':sid,'role':role,'content':content or '','meta':meta or {},'created_at':now()}; a.append(m); save_data('messages.json',a); return m
+    a=messages(); text=content or ''
+    m={'id':uuid.uuid4().hex,'session_id':sid,'role':role,'content':text,'meta':meta or {},'created_at':now()}; a.append(m)
+    sessions=all_sessions()
+    for item in sessions:
+        if item.get('id')==sid:
+            item['updated_at']=m['created_at']
+            if role=='user' and (not item.get('title') or item.get('title')=='新会话'):
+                item['title']=text.replace('\n',' ').strip()[:40] or '新会话'
+            break
+    save_data('messages.json',a); save_data('sessions.json',sessions); return m
 def delete(owner_id,sid):
     if not owned(owner_id,sid): return False
     save_data('sessions.json',[s for s in all_sessions() if s.get('id')!=sid]); save_data('messages.json',[m for m in messages() if m.get('session_id')!=sid]); return True
