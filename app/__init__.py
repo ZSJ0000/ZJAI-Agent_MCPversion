@@ -15,7 +15,7 @@ def _mask_secret(value):
     value=str(value or '')
     if not value: return ''
     if len(value) <= 10: return '*' * len(value)
-    return value[:6] + '*' * max(5, len(value)-10) + value[-4:]
+    return value[:7] + '*' * max(5, len(value)-11) + value[-4:]
 
 def _keep_or_replace(value, original):
     value=str(value or '').strip()
