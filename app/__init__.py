@@ -1,12 +1,27 @@
 import os, json
 from flask import Flask, redirect, session, request, jsonify, render_template, Response, stream_with_context
 from .config import SECRET_KEY
-from .services.json_store import ensure_dirs, save_config, config
+from .services.json_store import ensure_dirs, save_config, config, data, save_data
 from .services.auth_service import initialized, authenticate, create_user, users, public_user, set_enabled
 from .services.model_service import models, run, stream
 from .services.skill_service import load_skills
 from .services.mcp_service import list_tools
 from .services.session_service import create, owned, list_owned, get_messages, add_message, delete
+
+def _admin_required(session):
+    return session.get('user',{}).get('role') == 'admin'
+
+def _safe_models():
+    result=[]
+    for m in models():
+        item=dict(m); item.pop('api_key',None); result.append(item)
+    return result
+
+def _safe_mcp():
+    result=[]
+    for s in config('mcp.json',{'servers':[]}).get('servers',[]):
+        item=dict(s); item['headers_configured']=bool(s.get('headers')); item.pop('headers',None); result.append(item)
+    return result
 
 def create_app():
     app=Flask(__name__,template_folder='../templates',static_folder='../static'); app.secret_key=SECRET_KEY; ensure_dirs()
@@ -126,4 +141,55 @@ def create_app():
         ms=[dict(m,api_key='********' if m.get('api_key') else '') for m in models()]; ss=[]
         for s in config('mcp.json',{'servers':[]}).get('servers',[]): ss.append(dict(s,headers='********' if s.get('headers') else {}))
         return jsonify(models=ms,mcp=ss)
+    @app.post('/api/account/password')
+    def account_password():
+        if not uid(): return jsonify(error='未登录'),401
+        from .services.auth_service import authenticate
+        x=request.get_json(silent=True) or {}; current=x.get('current_password',''); new=x.get('new_password','')
+        u=authenticate(session['user'].get('username'),current)
+        if not u:return jsonify(error='当前密码错误'),400
+        if not new or len(new)<6:return jsonify(error='新密码至少 6 位'),400
+        from werkzeug.security import generate_password_hash
+        items=users()
+        for item in items:
+            if item.get('id')==str(uid()): item['password_hash']=generate_password_hash(new)
+        save_data('users.json',items); return jsonify(success=True)
+
+    @app.get('/AdminX/api/settings')
+    def admin_settings():
+        if not admin():return jsonify(error='无权限'),403
+        return jsonify(app=config('app.json',{}),models=_safe_models(),mcp=_safe_mcp(),skills=load_skills())
+
+    @app.put('/AdminX/api/models')
+    def admin_models_save():
+        if not admin():return jsonify(error='无权限'),403
+        payload=request.get_json(silent=True) or {}; incoming=payload.get('models',[])
+        if not isinstance(incoming,list):return jsonify(error='models 必须是数组'),400
+        clean=[]
+        for i,m in enumerate(incoming):
+            if not isinstance(m,dict) or not m.get('base_url') or not m.get('model'):continue
+            clean.append({'id':str(m.get('id') or 'api-'+str(i+1)),'name':str(m.get('name') or 'API '+str(i+1)),'base_url':str(m['base_url']).strip(),'api_key':str(m.get('api_key') or ''),'model':str(m['model']).strip(),'enabled':bool(m.get('enabled',True)),'default':bool(m.get('default',i==0))})
+        if clean and not any(m['default'] for m in clean):clean[0]['default']=True
+        save_config('models.json',{'models':clean});return jsonify(success=True,models=_safe_models())
+
+    @app.put('/AdminX/api/mcp')
+    def admin_mcp_save():
+        if not admin():return jsonify(error='无权限'),403
+        payload=request.get_json(silent=True) or {}; incoming=payload.get('servers',[])
+        if not isinstance(incoming,list):return jsonify(error='servers 必须是数组'),400
+        clean=[]
+        for i,item in enumerate(incoming):
+            if not isinstance(item,dict) or not item.get('url'):continue
+            protocol=item.get('protocol','streamable_http')
+            if protocol not in ('streamable_http','sse'):return jsonify(error='MCP 协议无效'),400
+            headers=item.get('headers') if isinstance(item.get('headers'),dict) else {}
+            clean.append({'id':str(item.get('id') or 'mcp-'+str(i+1)),'name':str(item.get('name') or 'MCP '+str(i+1)),'protocol':protocol,'url':str(item['url']).strip(),'enabled':bool(item.get('enabled',True)),'verify_ssl':bool(item.get('verify_ssl',True)),'headers':headers})
+        save_config('mcp.json',{'servers':clean});return jsonify(success=True,mcp=_safe_mcp())
+
+    @app.put('/AdminX/api/app-settings')
+    def admin_app_save():
+        if not admin():return jsonify(error='无权限'),403
+        x=request.get_json(silent=True) or {}; value={'name':str(x.get('name') or 'ZJAI-Agent_MCPversion'),'theme':str(x.get('theme') or 'terminal'),'welcome_message':str(x.get('welcome_message') or '欢迎使用。'),'initialized':True}
+        save_config('app.json',value);return jsonify(success=True,app=value)
+
     return app
