@@ -12,7 +12,7 @@ def create_app():
     app=Flask(__name__,template_folder='../templates',static_folder='../static'); app.secret_key=SECRET_KEY; ensure_dirs()
     @app.before_request
     def gate():
-        if not initialized() and request.path not in ('/setup','/login') and not request.path.startswith('/static'): return redirect('/setup')
+        if not initialized() and not (request.path == '/login' or request.path == '/setup' or request.path.startswith('/setup/')) and not request.path.startswith('/static'): return redirect('/setup')
     def uid(): return session.get('user',{}).get('id')
     def admin(): return session.get('user',{}).get('role')=='admin'
     @app.route('/')
