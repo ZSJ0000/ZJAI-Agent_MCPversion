@@ -1,7 +1,9 @@
+import os
 from werkzeug.security import generate_password_hash, check_password_hash
 from .json_store import data, save_data
+from app.config import DATA_DIR
 def users(): return data('users.json', [])
-def initialized(): return bool(users())
+def initialized(): return os.path.exists(os.path.join(DATA_DIR, 'install.lock'))
 def create_user(name, password, role='user'):
     name=(name or '').strip()
     if not name or len(password or '') < 6: raise ValueError('用户名不能为空，密码至少 6 位')
