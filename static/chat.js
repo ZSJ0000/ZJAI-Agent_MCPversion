@@ -248,21 +248,37 @@
   document.getElementById('logout').onclick = function () {
     fetch('/logout', { method: 'POST', redirect: 'manual' }).then(function () { location = '/login'; });
   };
-  input.addEventListener('keydown', function (event) {
-    // keyCode/which keeps Enter working in older Windows 7 browsers.
-    var isEnter = event.key === 'Enter' || event.keyCode === 13 || event.which === 13;
-    if (isEnter && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.isComposing) {
-      event.preventDefault();
-      event.stopPropagation();
+  function isEnterKey(event) {
+    event = event || window.event;
+    return event.key === 'Enter' || event.keyCode === 13 || event.which === 13;
+  }
+  function isComposing(event) {
+    event = event || window.event;
+    return event.isComposing === true || event.keyCode === 229 || event.which === 229;
+  }
+  input.onkeydown = function (event) {
+    event = event || window.event;
+    if (isEnterKey(event) && !event.shiftKey && !event.ctrlKey && !event.altKey && !isComposing(event)) {
+      if (event.preventDefault) event.preventDefault();
+      event.returnValue = false;
       send();
       return false;
     }
-  });
-  input.addEventListener('keypress', function (event) {
-    var isEnter = event.key === 'Enter' || event.keyCode === 13 || event.which === 13;
-    if (isEnter && !event.shiftKey && !event.isComposing) { event.preventDefault(); return false; }
-  });
-  document.getElementById('attach').onclick = function () { document.getElementById('file-input').click(); };
+  };
+  input.onkeypress = function (event) {
+    event = event || window.event;
+    if (isEnterKey(event) && !event.shiftKey && !isComposing(event)) {
+      if (event.preventDefault) event.preventDefault();
+      event.returnValue = false;
+      return false;
+    }
+  };
+  document.getElementById('attach').onclick = function (event) {
+    if (event && event.preventDefault) event.preventDefault();
+    var picker = document.getElementById('file-input');
+    if (picker) picker.click();
+    return false;
+  };
   document.getElementById('file-input').onchange = function () {
     var file = this.files && this.files[0];
     if (!file) return;
@@ -275,11 +291,7 @@
     reader.readAsText(file, 'utf-8');
     this.value = '';
   };
-  document.getElementById('send-button').onclick = function (event) { event.preventDefault(); send(); };
-  document.getElementById('form').addEventListener('submit', function (event) {
-    event.preventDefault();
-    send();
-    return false;
-  });
+  document.getElementById('send-button').onclick = function (event) { if (event && event.preventDefault) event.preventDefault(); send(); return false; };
+  document.getElementById('form').onsubmit = function (event) { event = event || window.event; if (event.preventDefault) event.preventDefault(); event.returnValue = false; send(); return false; };
   loadSessions();
 }());
