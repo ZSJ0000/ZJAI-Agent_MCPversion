@@ -54,3 +54,5 @@
 .code-block{padding-top:32px!important}
 .copy-code{position:absolute;top:5px;right:8px;width:auto!important;margin:0!important;padding:3px 8px!important;border:1px solid #00ff00!important;background:#000!important;color:#00ff00!important;font:12px Consolas,"Courier New",monospace!important;cursor:pointer}
 .copy-code:hover{background:#003300!important;color:#fff!important}
+
+.session-item{cursor:pointer}.session-item:active{background:#005500}
