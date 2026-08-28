@@ -37,3 +37,32 @@ def stream(model_id,messages):
             delta=obj.get('choices',[{}])[0].get('delta',{}).get('content')
             if delta:yield delta
         except ValueError:continue
+
+def stream_reply(model_id, messages):
+    model = _model(model_id)
+    if list_tools():
+        return None
+    skills = '\n\n'.join(x['content'] for x in load_skills())
+    payload_messages = ([{'role': 'system', 'content': skills}] + messages) if skills else messages
+    payload = {
+        'model': model['model'], 'messages': payload_messages,
+        'temperature': model.get('temperature', 0.7),
+        'max_tokens': model.get('max_tokens', 4096), 'stream': True
+    }
+    headers = {'Authorization': 'Bearer ' + model.get('api_key', ''), 'Content-Type': 'application/json', 'Accept': 'text/event-stream'}
+    response = requests.post(model['base_url'].rstrip('/') + '/chat/completions', json=payload, headers=headers, timeout=120, stream=True)
+    response.raise_for_status()
+    for raw in response.iter_lines(decode_unicode=True):
+        line = (raw or '').strip()
+        if not line or line.startswith(':'):
+            continue
+        if line.startswith('data:'):
+            line = line[5:].strip()
+        if line == '[DONE]':
+            break
+        try:
+            value = json.loads(line).get('choices', [{}])[0].get('delta', {}).get('content')
+            if value:
+                yield value
+        except (ValueError, TypeError, IndexError, KeyError):
+            continue
