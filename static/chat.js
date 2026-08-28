@@ -138,7 +138,7 @@
         };
         row.appendChild(button);
         var more = document.createElement('button');
-        more.type = 'button'; more.className = 'session-more'; more.title = '会话菜单'; more.textContent = '⋮';
+        more.type = 'button'; more.className = 'session-more'; more.title = '会话菜单'; more.textContent = '···';
         var menu = document.createElement('div'); menu.className = 'session-menu'; menu.style.display = 'none';
         var rename = document.createElement('button'); rename.type = 'button'; rename.textContent = '重命名';
         var remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '删除';
