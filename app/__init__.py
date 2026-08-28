@@ -16,19 +16,35 @@ def create_app():
     def admin(): return session.get('user',{}).get('role')=='admin'
     @app.route('/')
     def index(): return redirect('/chat' if uid() else '/login')
-    @app.route('/setup',methods=['GET','POST'])
-    def setup():
-        if initialized(): return render_template('message.html',title='系统已初始化',message='请返回登录页面。')
+    @app.route('/setup', defaults={'step': 1}, methods=['GET', 'POST'])
+    @app.route('/setup/<int:step>', methods=['GET', 'POST'])
+    def setup(step):
+        if initialized(): return render_template('message.html', title='系统已初始化', message='请返回登录页面。')
+        if step not in (1, 2, 3, 4): return redirect('/setup/1')
+        values=dict(session.get('setup_values', {})); error=None
         if request.method=='POST':
-            u=request.form.get('username','').strip(); p=request.form.get('password',''); c=request.form.get('confirm','')
-            if not u or len(p)<6 or p!=c:return render_template('setup.html',error='账号不能为空，密码至少6位且两次必须一致')
-            create_user(u,p,'admin'); names=request.form.getlist('api_name[]'); urls=request.form.getlist('api_base_url[]'); keys=request.form.getlist('api_key[]'); mids=request.form.getlist('api_model[]'); models_cfg=[]
-            for i,url in enumerate(urls):
-                models_cfg.append({'id':'api-'+str(i+1),'name':names[i] if i<len(names) else 'API '+str(i+1),'base_url':url.strip(),'api_key':keys[i] if i<len(keys) else '','model':mids[i] if i<len(mids) else '','enabled':True,'default':i==0})
-            save_config('models.json',{'models':models_cfg}); save_config('app.json',{'name':request.form.get('site_name','ZJAI-Agent_MCPversion'),'theme':request.form.get('theme','terminal'),'welcome_message':request.form.get('welcome_message','欢迎使用。'),'initialized':True}); murl=request.form.get('mcp_url','').strip(); headers={}; token=request.form.get('mcp_token','').strip();
-            if token: headers['Authorization']='Bearer '+token
-            save_config('mcp.json',{'servers':[{'id':'default','name':'默认 MCP','protocol':request.form.get('mcp_protocol','streamable_http'),'url':murl,'enabled':bool(murl),'verify_ssl':True,'headers':headers}]}); return redirect('/login')
-        return render_template('setup.html')
+            if step==2:
+                u=request.form.get('username','').strip(); p=request.form.get('password',''); c=request.form.get('confirm','')
+                if not u or len(p)<6 or p!=c: error='账号不能为空，密码至少 6 位且两次必须一致'
+                else: values.update({'username':u,'password':p}); session['setup_values']=values
+            elif step==3:
+                names=request.form.getlist('api_name[]'); urls=request.form.getlist('api_base_url[]'); keys=request.form.getlist('api_key[]'); mids=request.form.getlist('api_model[]')
+                apis=[{'name':names[i] if i<len(names) else 'API '+str(i+1),'url':urls[i].strip(),'key':keys[i] if i<len(keys) else '','model':mids[i] if i<len(mids) else ''} for i in range(len(urls)) if urls[i].strip()]
+                if not apis: error='请至少配置一个 API'
+                else: values['apis']=apis; session['setup_values']=values
+            elif step==4:
+                values.update({'site_name':request.form.get('site_name','ZJAI-Agent_MCPversion'),'theme':request.form.get('theme','terminal'),'welcome_message':request.form.get('welcome_message','欢迎使用。'),'mcp_url':request.form.get('mcp_url','').strip(),'mcp_protocol':request.form.get('mcp_protocol','streamable_http'),'mcp_token':request.form.get('mcp_token','').strip()}); session['setup_values']=values
+                try:
+                    create_user(values['username'],values['password'],'admin')
+                    save_config('models.json',{'models':[{'id':'api-'+str(i+1),'name':x['name'],'base_url':x['url'],'api_key':x['key'],'model':x['model'],'enabled':True,'default':i==0} for i,x in enumerate(values.get('apis',[]))]})
+                    headers={}
+                    if values.get('mcp_token'): headers['Authorization']='Bearer '+values['mcp_token']
+                    save_config('mcp.json',{'servers':[{'id':'default','name':'默认 MCP','protocol':values['mcp_protocol'],'url':values['mcp_url'],'enabled':bool(values['mcp_url']),'verify_ssl':True,'headers':headers}]})
+                    save_config('app.json',{'name':values['site_name'],'theme':values['theme'],'welcome_message':values['welcome_message'],'initialized':True}); session.pop('setup_values',None); return redirect('/login')
+                except Exception as e: error=str(e)
+            if error: return render_template('setup_step.html',step=step,values=values,error=error)
+            return redirect('/setup/'+str(step+1)) if step<4 else redirect('/login')
+        return render_template('setup_step.html',step=step,values=values,error=error)
     @app.route('/login',methods=['GET','POST'])
     def login():
         if request.method=='POST':
