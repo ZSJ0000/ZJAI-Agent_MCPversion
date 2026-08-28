@@ -50,3 +50,7 @@
 .message-content .md-list{display:block;padding-left:12px}.message-content strong{color:#ffff00;font-weight:bold}.inline-code{padding:1px 4px;border:1px solid #064;color:#00ffff}
 .code-block{position:relative;margin:12px 0;padding:28px 12px 12px;border:1px solid #00aa44;background:#020602;color:#00ff00;overflow:auto;white-space:pre;font:14px/1.55 Consolas,"Courier New",monospace}
 .code-lang{position:absolute;top:5px;left:10px;color:#ffff00;font-size:12px}
+
+.code-block{padding-top:32px!important}
+.copy-code{position:absolute;top:5px;right:8px;width:auto!important;margin:0!important;padding:3px 8px!important;border:1px solid #00ff00!important;background:#000!important;color:#00ff00!important;font:12px Consolas,"Courier New",monospace!important;cursor:pointer}
+.copy-code:hover{background:#003300!important;color:#fff!important}
