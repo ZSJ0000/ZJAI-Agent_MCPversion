@@ -37,7 +37,7 @@ def run(model_id,messages):
 def stream_reply(model_id, messages):
     if list_tools(): return None
     m=_model(model_id); body=_body(m,messages,True)
-    headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json','Accept':'text/event-stream'}
+    headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json','Accept':'text/event-stream','Accept-Charset':'utf-8'}
     response=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120,stream=True)
     response.raise_for_status(); response.encoding='utf-8'
     def chunks():
