@@ -48,9 +48,31 @@
     return source;
   }
 
+  function copyText(text, button) {
+    function done() { button.textContent = '已复制'; setTimeout(function () { button.textContent = '复制代码'; }, 1200); }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallback(); });
+    } else { fallback(); }
+    function fallback() {
+      var area = document.createElement('textarea'); area.value = text; area.style.position = 'fixed'; area.style.left = '-9999px';
+      document.body.appendChild(area); area.focus(); area.select();
+      try { if (document.execCommand('copy')) done(); else button.textContent = '复制失败'; } catch (e) { button.textContent = '复制失败'; }
+      document.body.removeChild(area);
+    }
+  }
+
+  function addCopyButtons(content) {
+    Array.prototype.forEach.call(content.querySelectorAll('pre.code-block'), function (block) {
+      var button = document.createElement('button'); button.type = 'button'; button.className = 'copy-code'; button.textContent = '复制代码';
+      button.onclick = function () { copyText(block.querySelector('code').textContent, button); };
+      block.appendChild(button);
+    });
+  }
+
   function setRendered(content, raw) {
     content.dataset.raw = raw || '';
     content.innerHTML = renderMarkdown(raw || '');
+    addCopyButtons(content);
   }
 
   function addMessage(role, text) {
