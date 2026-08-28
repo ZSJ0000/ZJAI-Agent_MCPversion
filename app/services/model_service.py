@@ -1,4 +1,16 @@
 import json, requests
+
+def _repair_mojibake(value):
+    value=str(value or '')
+    # Repair common UTF-8 bytes that were incorrectly decoded as Latin-1/CP1252.
+    markers=('Ã','Â','Ä','Å','Æ','Ç','Ð','Ñ','â','ã','ä','å','æ','ç','è','é','ê','ë','ì','í','î','ï','ð','ñ','ò','ó','ô','õ','ö','÷','ø','ù','ú','û','ü','ý','þ')
+    if any(mark in value for mark in markers):
+        try:
+            fixed=value.encode('latin1').decode('utf-8')
+            if fixed != value: return fixed
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    return value
 from .json_store import config
 from .mcp_service import list_tools, call_tool
 from .skill_service import load_skills
@@ -35,7 +47,7 @@ def stream(model_id,messages):
         try:
             obj=json.loads(line)
             delta=obj.get('choices',[{}])[0].get('delta',{}).get('content')
-            if delta:yield delta
+            if delta:yield _repair_mojibake(delta)
         except ValueError:continue
 
 def stream_reply(model_id, messages):
@@ -63,6 +75,6 @@ def stream_reply(model_id, messages):
         try:
             value = json.loads(line).get('choices', [{}])[0].get('delta', {}).get('content')
             if value:
-                yield value
+                yield _repair_mojibake(value)
         except (ValueError, TypeError, IndexError, KeyError):
             continue
