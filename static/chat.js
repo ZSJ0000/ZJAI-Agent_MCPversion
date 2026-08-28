@@ -136,12 +136,16 @@
           openSession(item.id);
           panel.classList.remove('mobile-open');
         };
-        button.ondblclick = function () {
-          var title = window.prompt('重命名会话', item.title || '新会话');
-          if (!title || !title.trim()) return;
-          json('/api/sessions/' + encodeURIComponent(item.id), {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:title.trim()})}).then(loadSessions);
-        };
         row.appendChild(button);
+        var more = document.createElement('button');
+        more.type = 'button'; more.className = 'session-more'; more.title = '会话菜单'; more.textContent = '⋮';
+        var menu = document.createElement('div'); menu.className = 'session-menu'; menu.style.display = 'none';
+        var rename = document.createElement('button'); rename.type = 'button'; rename.textContent = '重命名';
+        var remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '删除';
+        rename.onclick = function (event) { event.stopPropagation(); var title = window.prompt('重命名会话', item.title || '新会话'); if (!title || !title.trim()) return; json('/api/sessions/' + encodeURIComponent(item.id), {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:title.trim()})}).then(loadSessions); };
+        remove.onclick = function (event) { event.stopPropagation(); if (!window.confirm('确定删除会话“' + (item.title || '新会话') + '”吗？此操作不可恢复。')) return; json('/api/sessions/' + encodeURIComponent(item.id), {method:'DELETE'}).then(function () { if (sid === item.id) { sid = null; clearMessages(); } loadSessions(); }); };
+        menu.appendChild(rename); menu.appendChild(remove); row.appendChild(more); row.appendChild(menu);
+        more.onclick = function (event) { event.stopPropagation(); document.querySelectorAll('.session-menu').forEach(function (m) { if (m !== menu) m.style.display = 'none'; }); menu.style.display = menu.style.display === 'none' ? 'block' : 'none'; };
         list.appendChild(row);
       });
     });
@@ -237,6 +241,7 @@
   document.getElementById('new').onclick = function (event) {
     event.preventDefault(); sid = null; clearMessages(); markSelected(); input.focus();
   };
+  document.addEventListener('click', function () { document.querySelectorAll('.session-menu').forEach(function (m) { m.style.display = 'none'; }); });
   document.getElementById('refresh').onclick = loadSessions;
   document.getElementById('mobile-menu').onclick = function () { panel.classList.toggle('mobile-open'); };
   document.getElementById('logout').onclick = function () {
