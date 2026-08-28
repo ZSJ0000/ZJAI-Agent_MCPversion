@@ -3,7 +3,7 @@ from flask import Flask, redirect, session, request, jsonify, render_template, R
 from .config import SECRET_KEY
 from .services.json_store import ensure_dirs, save_config, config, data, save_data
 from .services.auth_service import initialized, authenticate, create_user, users, public_user, set_enabled
-from .services.model_service import models, run, stream_reply, stream
+from .services.model_service import models, run, stream_reply
 from .services.skill_service import load_skills
 from .services.mcp_service import list_tools
 from .services.session_service import create, owned, list_owned, get_messages, add_message, delete
