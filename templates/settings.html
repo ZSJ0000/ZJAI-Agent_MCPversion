@@ -9,5 +9,5 @@
   <a class="settings-option" href="/settings/password"><b>修改密码</b><span>更新当前账户密码</span><i>›</i></a>
 </div>
 <div class="actions"><a class="nav-button" href="/chat">返回聊天</a>{% if user.role == 'admin' %}<a class="nav-button" href="/AdminX">管理员控制台</a>{% endif %}<button id="logout" class="nav-button">注销</button></div>
-<script>document.getElementById('logout').onclick=function(){fetch('/logout',{method:'POST'}).then(function(){location='/login'})};</script>
+<script>document.getElementById('logout').onclick=function(){fetch('/logout',{method:'POST',redirect:'manual'}).then(function(){location='/login'})};</script>
 {% endblock %}
