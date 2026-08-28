@@ -34,47 +34,21 @@ def run(model_id,messages):
         for c in calls:
             result=call_tool(c['function']['name'],json.loads(c['function'].get('arguments') or '{}'));body['messages'].append({'role':'tool','tool_call_id':c.get('id',''),'name':c['function']['name'],'content':json.dumps(result,ensure_ascii=False)})
     raise ValueError('工具调用轮次超过限制')
-def stream(model_id,messages):
-    m=_model(model_id); ts=list_tools()
-    if ts: return None
-    body=_body(m,messages,True); headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json','Accept':'text/event-stream'}
-    r=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120,stream=True);r.raise_for_status();r.encoding='utf-8'
-    for raw in r.iter_lines(decode_unicode=True):
-        line=(raw or '').strip()
-        if not line or line.startswith(':'):continue
-        if line.startswith('data:'):line=line[5:].strip()
-        if line=='[DONE]':break
-        try:
-            obj=json.loads(line)
-            delta=obj.get('choices',[{}])[0].get('delta',{}).get('content')
-            if delta:yield _repair_mojibake(delta)
-        except ValueError:continue
-
 def stream_reply(model_id, messages):
-    model = _model(model_id)
-    if list_tools():
-        return None
-    skills = '\n\n'.join(x['content'] for x in load_skills())
-    payload_messages = ([{'role': 'system', 'content': skills}] + messages) if skills else messages
-    payload = {
-        'model': model['model'], 'messages': payload_messages,
-        'temperature': model.get('temperature', 0.7),
-        'max_tokens': model.get('max_tokens', 4096), 'stream': True
-    }
-    headers = {'Authorization': 'Bearer ' + model.get('api_key', ''), 'Content-Type': 'application/json', 'Accept': 'text/event-stream'}
-    response = requests.post(model['base_url'].rstrip('/') + '/chat/completions', json=payload, headers=headers, timeout=120, stream=True)
-    response.raise_for_status()
-    for raw in response.iter_lines(decode_unicode=True):
-        line = (raw or '').strip()
-        if not line or line.startswith(':'):
-            continue
-        if line.startswith('data:'):
-            line = line[5:].strip()
-        if line == '[DONE]':
-            break
-        try:
-            value = json.loads(line).get('choices', [{}])[0].get('delta', {}).get('content')
-            if value:
-                yield _repair_mojibake(value)
-        except (ValueError, TypeError, IndexError, KeyError):
-            continue
+    if list_tools(): return None
+    m=_model(model_id); body=_body(m,messages,True)
+    headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json','Accept':'text/event-stream'}
+    response=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120,stream=True)
+    response.raise_for_status(); response.encoding='utf-8'
+    def chunks():
+        for raw in response.iter_lines(decode_unicode=True):
+            line=(raw or '').strip()
+            if not line or line.startswith(':'): continue
+            if line.startswith('data:'): line=line[5:].strip()
+            if line=='[DONE]': break
+            try:
+                value=json.loads(line).get('choices',[{}])[0].get('delta',{}).get('content')
+                if value: yield _repair_mojibake(value)
+            except (ValueError,TypeError,IndexError,KeyError): continue
+    return chunks()
+
