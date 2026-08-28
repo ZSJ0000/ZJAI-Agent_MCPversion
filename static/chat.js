@@ -1,4 +1,5 @@
 (function () {
+  function byId(id) { return document.getElementById(id); }
   var model = document.getElementById('model');
   var box = document.getElementById('messages');
   var list = document.getElementById('sessions');
@@ -197,7 +198,7 @@
     if (busy) return;
     var text = input.value.trim();
     if (!text) return;
-    if (!model.value) { status.textContent = '● 请先配置并选择模型'; return; }
+    if (!model || !model.value) { status.textContent = '● 模型加载中，请稍候'; return; }
     busy = true;
     status.textContent = '● 模型正在回复';
     addMessage('用户', text);
@@ -273,7 +274,9 @@
       return false;
     }
   };
-  document.getElementById('attach').onclick = function (event) {
+  var attachButton = byId('attach');
+  var fileInput = byId('file-input');
+  if (attachButton && fileInput) attachButton.onclick = function (event) {
     if (event && event.preventDefault) event.preventDefault();
     var picker = document.getElementById('file-input');
     if (picker) picker.click();
@@ -293,5 +296,13 @@
   };
   document.getElementById('send-button').onclick = function (event) { if (event && event.preventDefault) event.preventDefault(); send(); return false; };
   document.getElementById('form').onsubmit = function (event) { event = event || window.event; if (event.preventDefault) event.preventDefault(); event.returnValue = false; send(); return false; };
+  // Fallback for old browsers where form submit/key events are inconsistent.
+  if (byId('form')) byId('form').onsubmit = function (event) {
+    event = event || window.event;
+    if (event.preventDefault) event.preventDefault();
+    event.returnValue = false;
+    send();
+    return false;
+  };
   loadSessions();
 }());
