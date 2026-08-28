@@ -22,7 +22,10 @@ def create_app():
         if request.method=='POST':
             u=request.form.get('username','').strip(); p=request.form.get('password',''); c=request.form.get('confirm','')
             if not u or len(p)<6 or p!=c:return render_template('setup.html',error='账号不能为空，密码至少6位且两次必须一致')
-            create_user(u,p,'admin'); save_config('app.json',{'name':'ZJAI-Agent_MCPversion','initialized':True}); save_config('models.json',{'models':[{'id':'default','name':request.form.get('model_name','默认模型'),'base_url':request.form.get('base_url','').strip(),'api_key':request.form.get('api_key',''),'model':request.form.get('model',''),'enabled':bool(request.form.get('base_url','').strip()),'default':True}]}); murl=request.form.get('mcp_url','').strip(); headers={}; token=request.form.get('mcp_token','').strip();
+            create_user(u,p,'admin'); names=request.form.getlist('api_name[]'); urls=request.form.getlist('api_base_url[]'); keys=request.form.getlist('api_key[]'); mids=request.form.getlist('api_model[]'); models_cfg=[]
+            for i,url in enumerate(urls):
+                models_cfg.append({'id':'api-'+str(i+1),'name':names[i] if i<len(names) else 'API '+str(i+1),'base_url':url.strip(),'api_key':keys[i] if i<len(keys) else '','model':mids[i] if i<len(mids) else '','enabled':True,'default':i==0})
+            save_config('models.json',{'models':models_cfg}); save_config('app.json',{'name':request.form.get('site_name','ZJAI-Agent_MCPversion'),'theme':request.form.get('theme','terminal'),'welcome_message':request.form.get('welcome_message','欢迎使用。'),'initialized':True}); murl=request.form.get('mcp_url','').strip(); headers={}; token=request.form.get('mcp_token','').strip();
             if token: headers['Authorization']='Bearer '+token
             save_config('mcp.json',{'servers':[{'id':'default','name':'默认 MCP','protocol':request.form.get('mcp_protocol','streamable_http'),'url':murl,'enabled':bool(murl),'verify_ssl':True,'headers':headers}]}); return redirect('/login')
         return render_template('setup.html')
