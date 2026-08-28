@@ -11,16 +11,29 @@ from .services.session_service import create, owned, list_owned, get_messages, a
 def _admin_required(session):
     return session.get('user',{}).get('role') == 'admin'
 
+def _mask_secret(value):
+    value=str(value or '')
+    if not value: return ''
+    if len(value) <= 10: return '*' * len(value)
+    return value[:6] + '*' * max(5, len(value)-10) + value[-4:]
+
 def _safe_models():
     result=[]
     for m in models():
-        item=dict(m); item.pop('api_key',None); result.append(item)
+        item=dict(m); item.pop('api_key',None)
+        item['api_key_masked']=_mask_secret(m.get('api_key'))
+        item['api_key_configured']=bool(m.get('api_key'))
+        result.append(item)
     return result
 
 def _safe_mcp():
     result=[]
     for s in config('mcp.json',{'servers':[]}).get('servers',[]):
-        item=dict(s); item['headers_configured']=bool(s.get('headers')); item.pop('headers',None); result.append(item)
+        item=dict(s); headers=s.get('headers') or {}
+        token=headers.get('Authorization','')
+        if token.lower().startswith('bearer '): token=token[7:]
+        item['token_masked']=_mask_secret(token)
+        item['headers_configured']=bool(headers); item.pop('headers',None); result.append(item)
     return result
 
 def create_app():
