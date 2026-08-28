@@ -25,3 +25,9 @@
 .setting-row{display:grid;grid-template-columns:1fr 1.5fr 1.2fr 1fr auto auto;gap:8px;margin:10px 0;padding:10px;border:1px solid #064}
 .setting-row input,.setting-row select{margin:0}.setting-row label{margin:0;white-space:nowrap}.setting-row .remove{width:auto;margin:0;color:#ff5555;border-color:#ff3333}
 @media(max-width:800px){.setting-row{grid-template-columns:1fr}.settings-option{min-height:80px}}
+
+/* API/MCP 配置行：Key 单独占满一行，确保掩码末尾也完整可见 */
+.setting-row{grid-template-columns:110px minmax(150px,1fr) 110px auto auto;align-items:center}
+.setting-row .key{grid-column:1/-1;width:100%;min-width:0;letter-spacing:.2px}
+.setting-row .name,.setting-row .url,.setting-row .model,.setting-row .protocol{min-width:0}
+@media(max-width:800px){.setting-row{grid-template-columns:1fr 1fr}.setting-row .key{grid-column:1/-1}.setting-row .remove{width:auto}}
