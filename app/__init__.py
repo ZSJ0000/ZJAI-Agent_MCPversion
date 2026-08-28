@@ -17,6 +17,10 @@ def _mask_secret(value):
     if len(value) <= 10: return '*' * len(value)
     return value[:6] + '*' * max(5, len(value)-10) + value[-4:]
 
+def _keep_or_replace(value, original):
+    value=str(value or '').strip()
+    return original if not value or '*' in value else value
+
 def _safe_models():
     result=[]
     for m in models():
@@ -194,7 +198,7 @@ def create_app():
         clean=[]
         for i,m in enumerate(incoming):
             if not isinstance(m,dict) or not m.get('base_url') or not m.get('model'):continue
-            clean.append({'id':str(m.get('id') or 'api-'+str(i+1)),'name':str(m.get('name') or 'API '+str(i+1)),'base_url':str(m['base_url']).strip(),'api_key':str(m.get('api_key') or next((old.get('api_key','') for old in models() if old.get('id')==m.get('id')),'')),'model':str(m['model']).strip(),'enabled':bool(m.get('enabled',True)),'default':bool(m.get('default',i==0))})
+            clean.append({'id':str(m.get('id') or 'api-'+str(i+1)),'name':str(m.get('name') or 'API '+str(i+1)),'base_url':str(m['base_url']).strip(),'api_key':_keep_or_replace(m.get('api_key'), next((old.get('api_key','') for old in models() if old.get('id')==m.get('id')), '')),'model':str(m['model']).strip(),'enabled':bool(m.get('enabled',True)),'default':bool(m.get('default',i==0))})
         if clean and not any(m['default'] for m in clean):clean[0]['default']=True
         save_config('models.json',{'models':clean});return jsonify(success=True,models=_safe_models())
 
@@ -208,7 +212,7 @@ def create_app():
             if not isinstance(item,dict) or not item.get('url'):continue
             protocol=item.get('protocol','streamable_http')
             if protocol not in ('streamable_http','sse'):return jsonify(error='MCP 协议无效'),400
-            headers=item.get('headers') if isinstance(item.get('headers'),dict) and item.get('headers') else next((old.get('headers',{}) for old in config('mcp.json',{'servers':[]}).get('servers',[]) if old.get('id')==item.get('id')), {})
+            incoming_headers=item.get('headers') if isinstance(item.get('headers'),dict) else {}; incoming_token=incoming_headers.get('Authorization',''); old_headers=next((old.get('headers',{}) for old in config('mcp.json',{'servers':[]}).get('servers',[]) if old.get('id')==item.get('id')), {}); old_token=old_headers.get('Authorization',''); headers={'Authorization':_keep_or_replace(incoming_token,old_token)} if (incoming_token or old_token) else {}
             clean.append({'id':str(item.get('id') or 'mcp-'+str(i+1)),'name':str(item.get('name') or 'MCP '+str(i+1)),'protocol':protocol,'url':str(item['url']).strip(),'enabled':bool(item.get('enabled',True)),'verify_ssl':bool(item.get('verify_ssl',True)),'headers':headers})
         save_config('mcp.json',{'servers':clean});return jsonify(success=True,mcp=_safe_mcp())
 
