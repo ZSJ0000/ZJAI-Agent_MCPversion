@@ -1,6 +1,5 @@
-import json
 import os, json
-from flask import Flask, redirect, session, request, jsonify, render_template, Response, stream_with_context, Response, stream_with_context
+from flask import Flask, redirect, session, request, jsonify, render_template, Response, stream_with_context
 from .config import SECRET_KEY
 from .services.json_store import ensure_dirs, save_config, config, data, save_data
 from .services.auth_service import initialized, authenticate, create_user, users, public_user, set_enabled
@@ -73,6 +72,13 @@ def create_app():
     def logout(): session.clear(); return redirect('/login')
     @app.get('/settings')
     def settings_page(): return render_template('settings.html',user=session['user']) if uid() else redirect('/login')
+    @app.get('/settings/<section>')
+    def settings_section(section):
+        if not uid(): return redirect('/login')
+        allowed=('models','mcp','appearance','password','skills')
+        if section not in allowed: return redirect('/settings')
+        if section in ('models','mcp','appearance','skills') and not admin(): return ('无权限',403)
+        return render_template('settings_section.html', user=session['user'], section=section)
     @app.get('/chat')
     def chat_page(): return render_template('chat.html',user=session['user']) if uid() else redirect('/login')
     @app.get('/api/models')
@@ -175,7 +181,7 @@ def create_app():
         clean=[]
         for i,m in enumerate(incoming):
             if not isinstance(m,dict) or not m.get('base_url') or not m.get('model'):continue
-            clean.append({'id':str(m.get('id') or 'api-'+str(i+1)),'name':str(m.get('name') or 'API '+str(i+1)),'base_url':str(m['base_url']).strip(),'api_key':str(m.get('api_key') or ''),'model':str(m['model']).strip(),'enabled':bool(m.get('enabled',True)),'default':bool(m.get('default',i==0))})
+            clean.append({'id':str(m.get('id') or 'api-'+str(i+1)),'name':str(m.get('name') or 'API '+str(i+1)),'base_url':str(m['base_url']).strip(),'api_key':str(m.get('api_key') or next((old.get('api_key','') for old in models() if old.get('id')==m.get('id')),'')),'model':str(m['model']).strip(),'enabled':bool(m.get('enabled',True)),'default':bool(m.get('default',i==0))})
         if clean and not any(m['default'] for m in clean):clean[0]['default']=True
         save_config('models.json',{'models':clean});return jsonify(success=True,models=_safe_models())
 
@@ -189,7 +195,7 @@ def create_app():
             if not isinstance(item,dict) or not item.get('url'):continue
             protocol=item.get('protocol','streamable_http')
             if protocol not in ('streamable_http','sse'):return jsonify(error='MCP 协议无效'),400
-            headers=item.get('headers') if isinstance(item.get('headers'),dict) else {}
+            headers=item.get('headers') if isinstance(item.get('headers'),dict) and item.get('headers') else next((old.get('headers',{}) for old in config('mcp.json',{'servers':[]}).get('servers',[]) if old.get('id')==item.get('id')), {})
             clean.append({'id':str(item.get('id') or 'mcp-'+str(i+1)),'name':str(item.get('name') or 'MCP '+str(i+1)),'protocol':protocol,'url':str(item['url']).strip(),'enabled':bool(item.get('enabled',True)),'verify_ssl':bool(item.get('verify_ssl',True)),'headers':headers})
         save_config('mcp.json',{'servers':clean});return jsonify(success=True,mcp=_safe_mcp())
 
