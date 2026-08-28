@@ -5,8 +5,8 @@
   var list = document.getElementById('sessions');
   var input = document.getElementById('input');
   var status = document.getElementById('status');
-  function setStatus(text) { if (status) status.textContent = text; }
-  function getStatus() { return status ? status.textContent : ''; }
+  function setStatus(text) { if (status) status['textContent'] = text; }
+  function getStatus() { return status ? status['textContent'] : ''; }
   var panel = document.getElementById('conversation-panel');
   var sid = null;
   var busy = false;
