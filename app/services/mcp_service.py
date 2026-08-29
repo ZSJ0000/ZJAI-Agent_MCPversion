@@ -3,70 +3,71 @@ from urllib.parse import urljoin
 from .json_store import config
 class MCPError(Exception): pass
 
-def servers(): return config('mcp.json',{'servers':[]}).get('servers',[])
-
+def servers(): return config('mcp.json', {'servers':[]}).get('servers',[])
 def _headers(s):
     h=dict(s.get('headers') or {})
-    if not s.get('oauth_enabled', bool(h.get('Authorization'))):
-        h.pop('Authorization',None)
+    if not s.get('oauth_enabled', bool(h.get('Authorization'))): h.pop('Authorization',None)
     h.setdefault('Accept','application/json, text/event-stream')
     return h
-
-def _sse_endpoint(s,h):
-    r=requests.get(s['url'],headers=h,stream=True,timeout=30,verify=s.get('verify_ssl',True)); r.raise_for_status()
-    for raw in r.iter_lines(decode_unicode=True):
-        line=(raw or '').strip()
-        if line.startswith('data:') and line[5:].strip(): return urljoin(s['url'], line[5:].strip())
-    raise MCPError('SSE 未返回 endpoint')
 
 def _json_response(r):
     text=r.text.strip()
     if text.startswith('data:'): text=text[5:].strip()
     try: return r.json() if text==r.text.strip() else json.loads(text)
-    except ValueError: raise MCPError('MCP 返回不是 JSON')
+    except ValueError: raise MCPError('MCP 返回不是 JSON: '+text[:300])
 
-def _post(url, payload, h, s):
+def _post(url,payload,h,s):
     r=requests.post(url,json=payload,headers=h,timeout=60,verify=s.get('verify_ssl',True)); r.raise_for_status()
     sid=r.headers.get('Mcp-Session-Id') or r.headers.get('mcp-session-id')
-    return _json_response(r), sid
+    return _json_response(r),sid
 
-def _request(s, method, params=None):
-    h=_headers(s); payload={'jsonrpc':'2.0','id':str(uuid.uuid4()),'method':method,'params':params or {}}
+def _sse_endpoint(s,h):
+    r=requests.get(s['url'],headers=h,stream=True,timeout=30,verify=s.get('verify_ssl',True)); r.raise_for_status()
+    for raw in r.iter_lines(decode_unicode=True):
+        line=(raw or '').strip()
+        if line.startswith('data:') and line[5:].strip():
+            endpoint=urljoin(s['url'],line[5:].strip()); r.close(); return endpoint
+    r.close(); raise MCPError('SSE 未返回 endpoint')
+
+def _request(s,method,params=None):
+    h=_headers(s); request_id=str(uuid.uuid4()); payload={'jsonrpc':'2.0','id':request_id,'method':method,'params':params or {}}
     protocol=s.get('protocol','streamable_http')
-    if protocol=='sse':
-        return _post(_sse_endpoint(s,h),payload,h,s)[0]
-    # MCP Streamable HTTP requires initialize before tools/list/tools/call.
-    init, sid=_post(s['url'], {'jsonrpc':'2.0','id':payload['id'],'method':'initialize','params':{
-        'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'ZJAI-Agent','version':'1.0'}
-    }}, h, s)
+    if protocol=='sse': return _post(_sse_endpoint(s,h),payload,h,s)[0]
+    init_payload={'jsonrpc':'2.0','id':request_id,'method':'initialize','params':{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'ZJAI-Agent','version':'1.0'}}}
+    init,sid=_post(s['url'],init_payload,h,s)
     if sid: h['Mcp-Session-Id']=sid
-    if init.get('error'): raise MCPError(str(init['error']))
-    notice={'jsonrpc':'2.0','method':'notifications/initialized','params':{}}
-    try: requests.post(s['url'],json=notice,headers=h,timeout=30,verify=s.get('verify_ssl',True))
+    if init.get('error'): raise MCPError('initialize 失败: '+json.dumps(init['error'],ensure_ascii=False))
+    try: requests.post(s['url'],json={'jsonrpc':'2.0','method':'notifications/initialized','params':{}},headers=h,timeout=30,verify=s.get('verify_ssl',True))
     except requests.RequestException: pass
     result,_=_post(s['url'],payload,h,s)
     return result
 
-def list_tools():
+def list_tools_details():
     out=[]; errors=[]
     for s in servers():
         if not s.get('enabled',True) or not s.get('url'): continue
         try:
             result=_request(s,'tools/list')
-            if result.get('error'): raise MCPError(str(result['error']))
-            for t in result.get('result',{}).get('tools',[]): out.append(dict(t,_mcp_server=s.get('id')))
-        except Exception as exc: errors.append('%s: %s'%(s.get('name') or s.get('id') or 'MCP',exc))
-    return out
+            if result.get('error'): raise MCPError(json.dumps(result['error'],ensure_ascii=False))
+            tools=result.get('result',{}).get('tools',[])
+            for t in tools: out.append(dict(t,_mcp_server=s.get('id'),_mcp_url=s.get('url')))
+        except Exception as exc: errors.append('%s [%s]: %s'%(s.get('name') or s.get('id') or 'MCP',s.get('url'),exc))
+    return out,errors
+
+def list_tools(): return list_tools_details()[0]
+def diagnostics():
+    tools,errors=list_tools_details()
+    return {'servers':[{'id':s.get('id'),'name':s.get('name'),'url':s.get('url'),'protocol':s.get('protocol'),'enabled':s.get('enabled',True)} for s in servers()], 'tool_count':len(tools), 'tools':[t.get('name') for t in tools], 'errors':errors}
 
 def call_tool(name,args):
+    tools,errors=list_tools_details()
+    matches=[t for t in tools if t.get('name')==name]
+    if not matches:
+        detail='；'.join(errors) if errors else '当前工具列表中不存在该工具'
+        raise MCPError('MCP 工具不可用: %s；%s'%(name,detail))
     for s in servers():
-        if not s.get('enabled',True) or not s.get('url'): continue
-        try:
-            result=_request(s,'tools/list')
-            ts=result.get('result',{}).get('tools',[])
-            if any(t.get('name')==name for t in ts):
-                result=_request(s,'tools/call',{'name':name,'arguments':args})
-                if result.get('error'): raise MCPError(str(result['error']))
-                return result.get('result',{})
-        except Exception: continue
-    raise MCPError('MCP 工具不存在或调用失败: '+name)
+        if not s.get('enabled',True) or not s.get('url') or s.get('id')!=matches[0].get('_mcp_server'): continue
+        result=_request(s,'tools/call',{'name':name,'arguments':args})
+        if result.get('error'): raise MCPError('工具调用失败: '+json.dumps(result['error'],ensure_ascii=False))
+        return result.get('result',{})
+    raise MCPError('MCP 服务不存在: '+name)
