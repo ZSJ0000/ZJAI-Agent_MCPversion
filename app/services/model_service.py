@@ -91,15 +91,45 @@ def _model(model_id):
     m=next((x for x in models() if x.get('id')==model_id and x.get('enabled',True)),None)
     if not m: raise ValueError('模型不存在或未启用')
     return m
+def _mcp_instruction(tools):
+    if not tools:
+        return "当前没有可用的 MCP 工具。不要编造或输出任何工具调用。"
+    lines=[]
+    for t in tools:
+        schema=t.get("inputSchema") or {}
+        props=schema.get("properties") or {}
+        required=schema.get("required") or []
+        args=[]
+        for key,value in props.items():
+            desc=value.get("description","") if isinstance(value,dict) else ""
+            args.append("%s%s%s" % (key, "(必填)" if key in required else "(可选)", ": "+desc if desc else ""))
+        lines.append("- %s: %s%s" % (t.get("name"), t.get("description",""), ("；参数："+"，".join(args)) if args else ""))
+    return """你是一个可以调用 MCP 工具的助手。
+
+当前真实可用的 MCP 工具：
+%s
+
+工具调用规则（必须遵守）：
+1. 只能调用上面列出的真实工具，严禁编造工具名称。
+2. 需要执行工具时，必须只输出一条完整的工具调用，不要先说“我正在调用”。
+3. 工具调用必须严格使用以下格式，JSON 必须完整且可解析：
+<tool_call>{\"name\":\"工具真实名称\",\"arguments\":{\"参数名\":\"参数值\"}}</tool_call>
+4. arguments 必须是 JSON 对象，并且严格符合该工具的参数要求。
+5. 不要输出 mcp_xxx({...})、Python 函数调用、Markdown 代码块或不完整 JSON。
+6. 工具执行结果返回后，再用中文向用户说明结果。
+""" % "\n".join(lines)
+
 def _body(m,messages,stream=False):
-    ts=list_tools(); skills='\n\n'.join(x['content'] for x in load_skills())
-    instruction='''你可以调用当前请求中的 MCP 工具。只有当前 tools 列表中存在的工具才可以调用。必须使用工具调用协议，不要把工具调用当作普通回答展示。不要编造 write_file；请使用真实工具名称和参数。工具执行完成后，再用中文说明结果。'''
-    system='\n\n'.join([instruction,skills] if skills else [instruction])
-    all_messages=[{'role':'system','content':system}]+messages
-    b={'model':m['model'],'messages':all_messages,'temperature':m.get('temperature',.7),'max_tokens':m.get('max_tokens',4096)}
-    if stream:b['stream']=True
-    if ts:b['tools']=[{'type':'function','function':{'name':t['name'],'description':t.get('description',''),'parameters':t.get('inputSchema',{})}} for t in ts]
+    ts=list_tools()
+    skills="\n\n".join(x["content"] for x in load_skills())
+    instruction=_mcp_instruction(ts)
+    system="\n\n".join([instruction,skills] if skills else [instruction])
+    all_messages=[{"role":"system","content":system}]+messages
+    b={"model":m["model"],"messages":all_messages,"temperature":m.get("temperature",.7),"max_tokens":m.get("max_tokens",4096)}
+    if stream:b["stream"]=True
+    if ts:b["tools"]=[{"type":"function","function":{"name":t["name"],"description":t.get("description",""),"parameters":t.get("inputSchema",{})}} for t in ts]
     return b
+
 def run(model_id,messages):
     m=_model(model_id); body=_body(m,messages); headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json'}
     for _ in range(5):
