@@ -12,7 +12,7 @@ def _repair_mojibake(value):
             pass
     return value
 from .json_store import config
-from .mcp_service import list_tools, call_tool
+from .mcp_service import list_tools, call_tool, diagnostics
 from .skill_service import load_skills
 def _json_objects(text):
     """Extract complete balanced JSON objects from model text."""
@@ -87,8 +87,10 @@ def _model(model_id):
     if not m: raise ValueError('模型不存在或未启用')
     return m
 def _body(m,messages,stream=False):
-    ts=list_tools(); skills='\n\n'.join(x['content'] for x in load_skills()); all_messages=messages
-    if skills: all_messages=[{'role':'system','content':skills}]+all_messages
+    ts=list_tools(); skills='\n\n'.join(x['content'] for x in load_skills())
+    instruction='''你可以调用当前请求中的 MCP 工具。只有当前 tools 列表中存在的工具才可以调用。必须使用工具调用协议，不要把工具调用当作普通回答展示。不要编造 write_file；请使用真实工具名称和参数。工具执行完成后，再用中文说明结果。'''
+    system='\n\n'.join([instruction,skills] if skills else [instruction])
+    all_messages=[{'role':'system','content':system}]+messages
     b={'model':m['model'],'messages':all_messages,'temperature':m.get('temperature',.7),'max_tokens':m.get('max_tokens',4096)}
     if stream:b['stream']=True
     if ts:b['tools']=[{'type':'function','function':{'name':t['name'],'description':t.get('description',''),'parameters':t.get('inputSchema',{})}} for t in ts]
