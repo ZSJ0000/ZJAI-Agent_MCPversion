@@ -317,7 +317,7 @@
   document.getElementById('new').onclick = function (event) {
     event.preventDefault(); sid = null; clearMessages(); markSelected(); input.focus();
   };
-  document.addEventListener('click', function () { document.querySelectorAll('.session-menu').forEach(function (m) { m.style.display = 'none'; }); });
+  document.addEventListener('click', function (event) { document.querySelectorAll('.session-menu').forEach(function (m) { m.style.display = 'none'; }); if (attachMenu && !event.target.closest('.attach-menu-wrap')) { attachMenu.classList.remove('show'); if (attachButton) attachButton.setAttribute('aria-expanded', 'false'); } });
   document.getElementById('refresh').onclick = loadSessions;
   document.getElementById('mobile-menu').onclick = function () { panel.classList.toggle('mobile-open'); };
   document.getElementById('logout').onclick = function () {
@@ -350,10 +350,19 @@
   };
   var attachButton = byId('attach');
   var fileInput = byId('file-input');
-  if (attachButton && fileInput) attachButton.onclick = function (event) {
+  var attachMenu = byId('attach-menu');
+  var attachFile = byId('attach-file');
+  if (attachButton && attachMenu) attachButton.onclick = function (event) {
     if (event && event.preventDefault) event.preventDefault();
-    var picker = document.getElementById('file-input');
-    if (picker) picker.click();
+    var open = attachMenu.classList.toggle('show');
+    attachButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+    return false;
+  };
+  if (attachFile && fileInput) attachFile.onclick = function (event) {
+    if (event && event.preventDefault) event.preventDefault();
+    attachMenu.classList.remove('show');
+    if (attachButton) attachButton.setAttribute('aria-expanded', 'false');
+    fileInput.click();
     return false;
   };
   if (document.getElementById('file-input')) document.getElementById('file-input').onchange = function () {
