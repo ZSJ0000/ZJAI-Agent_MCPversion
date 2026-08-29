@@ -37,7 +37,7 @@ def _safe_mcp():
         token=headers.get('Authorization','')
         if token.lower().startswith('bearer '): token=token[7:]
         item['token_masked']=_mask_secret(token)
-        item['headers_configured']=bool(headers); item.pop('headers',None); result.append(item)
+        item['headers_configured']=bool(headers); item['oauth_enabled']=bool(s.get('oauth_enabled', bool(headers.get('Authorization')))); item.pop('headers',None); result.append(item)
     return result
 
 def create_app():
@@ -232,8 +232,8 @@ def create_app():
             if not isinstance(item,dict) or not item.get('url'):continue
             protocol=item.get('protocol','streamable_http')
             if protocol not in ('streamable_http','sse'):return jsonify(error='MCP 协议无效'),400
-            incoming_headers=item.get('headers') if isinstance(item.get('headers'),dict) else {}; incoming_token=incoming_headers.get('Authorization',''); old_headers=next((old.get('headers',{}) for old in config('mcp.json',{'servers':[]}).get('servers',[]) if old.get('id')==item.get('id')), {}); old_token=old_headers.get('Authorization',''); headers={'Authorization':_keep_or_replace(incoming_token,old_token)} if (incoming_token or old_token) else {}
-            clean.append({'id':str(item.get('id') or 'mcp-'+str(i+1)),'name':str(item.get('name') or 'MCP '+str(i+1)),'protocol':protocol,'url':str(item['url']).strip(),'enabled':bool(item.get('enabled',True)),'verify_ssl':bool(item.get('verify_ssl',True)),'headers':headers})
+            incoming_headers=item.get('headers') if isinstance(item.get('headers'),dict) else {}; incoming_token=incoming_headers.get('Authorization',''); old_item=next((old for old in config('mcp.json',{'servers':[]}).get('servers',[]) if old.get('id')==item.get('id')), {}); old_headers=old_item.get('headers',{}) or {}; old_token=old_headers.get('Authorization',''); headers={'Authorization':_keep_or_replace(incoming_token,old_token)} if (incoming_token or old_token) else {}; oauth_enabled=bool(item.get('oauth_enabled', bool(headers.get('Authorization'))))
+            clean.append({'id':str(item.get('id') or 'mcp-'+str(i+1)),'name':str(item.get('name') or 'MCP '+str(i+1)),'protocol':protocol,'url':str(item['url']).strip(),'enabled':bool(item.get('enabled',True)),'oauth_enabled':oauth_enabled,'verify_ssl':bool(item.get('verify_ssl',True)),'headers':headers})
         save_config('mcp.json',{'servers':clean});return jsonify(success=True,mcp=_safe_mcp())
 
     @app.put('/AdminX/api/app-settings')
