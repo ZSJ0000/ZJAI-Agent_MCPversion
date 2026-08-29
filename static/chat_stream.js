@@ -10,6 +10,7 @@
   var panel = document.getElementById('conversation-panel');
   var sid = null;
   var busy = false;
+  var activeRequest = null;
 
   function json(url, options) {
     return fetch(url, options).then(function (r) {
@@ -208,12 +209,9 @@
     addMessage('用户', text);
     var reply = loadingMessage();
     input.value = '';
-    fetch('/api/chat/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, model_id: model.value, session_id: sid })
-    ,headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' }
-    }).then(function (response) {
+    var requestOptions = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' }, body: JSON.stringify({ message: text, model_id: model.value, session_id: sid }) };
+    if (window.AbortController) { activeRequest = new AbortController(); requestOptions.signal = activeRequest.signal; }
+    fetch('/api/chat/stream', requestOptions).then(function (response) {
       if (!response.ok) return response.json().then(function (data) { throw new Error(data.error || '后端请求失败'); });
       return readStream(response, reply);
     }).catch(function (error) {
@@ -221,8 +219,8 @@
       setRendered(reply, '错误：' + error.message);
       setStatus('● 异常');
     }).then(function () {
-      if (getStatus() !== '● 异常') setStatus('● 就绪');
-      busy = false;
+      if (getStatus() !== '● 异常' && getStatus() !== '● 已取消') setStatus('● 就绪');
+      busy = false; activeRequest = null;
     });
   }
 
@@ -287,7 +285,7 @@
     if (picker) picker.click();
     return false;
   };
-  document.getElementById('file-input').onchange = function () {
+  if (document.getElementById('file-input')) document.getElementById('file-input').onchange = function () {
     var file = this.files && this.files[0];
     if (!file) return;
     var allowed = /\.(txt|md|py|js|json|html|css|bat|sh|yaml|yml|xml|csv|ini|log)$/i.test(file.name);
@@ -299,6 +297,8 @@
     reader.readAsText(file, 'utf-8');
     this.value = '';
   };
+  var cancelButton = byId('cancel');
+  if (cancelButton) cancelButton.onclick = function () { if (activeRequest && activeRequest.abort) { activeRequest.abort(); setStatus('● 已取消'); } };
   document.getElementById('send-button').onclick = function (event) { if (event && event.preventDefault) event.preventDefault(); send(); return false; };
   document.getElementById('form').onsubmit = function (event) { event = event || window.event; if (event.preventDefault) event.preventDefault(); event.returnValue = false; send(); return false; };
   // Fallback for old browsers where form submit/key events are inconsistent.
