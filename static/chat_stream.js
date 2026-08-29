@@ -177,7 +177,7 @@
       card.setAttribute('data-started', String(new Date().getTime()));
       var head = document.createElement('button'); head.type = 'button'; head.className = 'tool-head';
       head.innerHTML = '<span class="tool-spinner">◌</span> <span class="tool-state">运行中</span> <strong></strong><span class="tool-time"></span><span class="tool-arrow">⌄</span>';
-      var detail = document.createElement('div'); detail.className = 'tool-detail show';
+      var detail = document.createElement('div'); detail.className = 'tool-detail';
       detail.innerHTML = '<div class="tool-label">INPUT</div><pre class="tool-input"></pre><div class="tool-label">OUTPUT</div><pre class="tool-output">等待工具返回...</pre>';
       head.onclick = function () { detail.classList.toggle('show'); card.classList.toggle('tool-collapsed', !detail.classList.contains('show')); };
       card.appendChild(head); card.appendChild(detail); item.appendChild(card);
