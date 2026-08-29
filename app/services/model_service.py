@@ -12,7 +12,7 @@ def _repair_mojibake(value):
             pass
     return value
 from .json_store import config
-from .mcp_service import list_tools, call_tool
+from .mcp_service import list_tools, call_tool, availability_warning
 from .skill_service import load_skills
 def _json_objects(text):
     """Extract complete balanced JSON objects from model text."""
@@ -121,8 +121,10 @@ def _mcp_instruction(tools):
 
 def _body(m,messages,stream=False):
     ts=list_tools()
+    warning=availability_warning()
     skills="\n\n".join(x["content"] for x in load_skills())
     instruction=_mcp_instruction(ts)
+    if warning: instruction += '\n\n' + warning + '\n请不要假装调用不可用的 MCP 工具；如用户的问题不依赖 MCP，请继续正常回答。'
     system="\n\n".join([instruction,skills] if skills else [instruction])
     all_messages=[{"role":"system","content":system}]+messages
     b={"model":m["model"],"messages":all_messages,"temperature":m.get("temperature",.7),"max_tokens":m.get("max_tokens",4096)}
@@ -147,7 +149,11 @@ def run(model_id,messages):
             if msg.get('content'): msg['content']=_clean_tool_markup(msg.get('content'))
             return msg
         for c in calls:
-            result=call_tool(c['function']['name'],json.loads(c['function'].get('arguments') or '{}'));body['messages'].append({'role':'tool','tool_call_id':c.get('id',''),'name':c['function']['name'],'content':json.dumps(result,ensure_ascii=False)})
+            try:
+                result=call_tool(c['function']['name'],json.loads(c['function'].get('arguments') or '{}'))
+            except Exception as exc:
+                result={'content':[{'type':'text','text':'当前MCP不可用：'+str(exc)}], 'isError':True}
+            body['messages'].append({'role':'tool','tool_call_id':c.get('id',''),'name':c['function']['name'],'content':json.dumps(result,ensure_ascii=False)})
     raise ValueError('工具调用轮次超过限制')
 def stream_reply(model_id, messages):
     if list_tools(): return None
