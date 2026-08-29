@@ -66,6 +66,18 @@ def list_tools():
     if enabled and not tools and errors:
         raise MCPError('；'.join(errors))
     return tools
+def test_connection(server_id=None):
+    selected=[s for s in servers() if s.get('enabled',True) and s.get('url') and (server_id is None or s.get('id')==server_id)]
+    if not selected: return {'ok':False,'error':'没有启用的 MCP 服务'}
+    results=[]
+    for s in selected:
+        try:
+            result=_request(s,'tools/list'); tools=result.get('result',{}).get('tools',[])
+            results.append({'id':s.get('id'),'name':s.get('name'),'url':s.get('url'),'protocol':s.get('protocol'),'ok':True,'tool_count':len(tools),'tools':[t.get('name') for t in tools]})
+        except Exception as exc:
+            results.append({'id':s.get('id'),'name':s.get('name'),'url':s.get('url'),'protocol':s.get('protocol'),'ok':False,'error':str(exc)})
+    return {'ok':any(x.get('ok') for x in results),'results':results}
+
 def diagnostics():
     tools,errors=list_tools_details()
     return {'servers':[{'id':s.get('id'),'name':s.get('name'),'url':s.get('url'),'protocol':s.get('protocol'),'enabled':s.get('enabled',True)} for s in servers()], 'tool_count':len(tools), 'tools':[t.get('name') for t in tools], 'errors':errors}
