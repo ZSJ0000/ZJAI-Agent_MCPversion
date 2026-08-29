@@ -169,18 +169,21 @@ def create_app():
             except Exception as exc: return jsonify(error=str(exc), session_id=current['id']), 502
         def generate():
             parts=[]
+            tool_events=[]
             try:
                 if mcp_warning:
                     parts.append(mcp_warning + '\n\n')
                     yield 'data: '+json.dumps({'type':'delta','content':mcp_warning+'\n\n'}, ensure_ascii=False)+'\n\n'
                 if tool_mode:
-                    tool_events=[]
                     def on_tool(kind,name,value): tool_events.append((kind,name,value))
                     answer=run(x.get('model_id'), [{'role':m['role'],'content':m['content']} for m in get_messages(current['id'])], on_tool=on_tool)
                     for kind,name,value in tool_events:
                         event_text=_tool_event_text(kind,name,value)
                         yield 'data: '+json.dumps({'type':'tool_'+kind,'name':name,'data':value,'content':event_text}, ensure_ascii=False)+'\n\n'
                     text=answer.get('content','') or ''
+                    # Tool execution status belongs to the Agent UI, not the assistant reply.
+                    if tool_events and text.strip() in ('操作成功', '操作完成', '执行成功', '已完成操作'):
+                        text = ''
                     if text:
                         parts.append(text)
                         yield 'data: '+json.dumps({'type':'delta','content':text}, ensure_ascii=False)+'\n\n'
