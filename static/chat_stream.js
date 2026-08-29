@@ -221,6 +221,13 @@
           reply.classList.remove('reply-loading');
           setRendered(reply, '');
         }
+        // Keep each Agent text segment in the event timeline. Tool cards are
+        // appended to the current segment, so later text starts a new segment.
+        var last = reply.parentNode && reply.parentNode.lastElementChild;
+        if (data.type === 'progress' && last && last.classList && last.classList.contains('tool-card')) {
+          var next = document.createElement('div'); next.className = 'message-content agent-progress';
+          reply.parentNode.appendChild(next); reply = next;
+        }
         setRendered(reply, (reply.dataset.raw || '') + (data.content || ''));
         box.scrollTop = box.scrollHeight;
       } else if (data.type === 'done') {
