@@ -68,6 +68,13 @@ def availability_warning():
     if errors:
         return '当前MCP不可用：' + '；'.join(errors)
     return ''
+
+def user_connection_warning():
+    warning=availability_warning()
+    if not warning:
+        return ''
+    detail=warning.split('：',1)[1] if '：' in warning else warning
+    return '当前无法连接MCP服务器，错误代码：%s。如果不需要MCP，请暂时禁用该服务器。' % detail
 def test_connection(server_id=None):
     selected=[s for s in servers() if s.get('enabled',True) and s.get('url') and (server_id is None or s.get('id')==server_id)]
     if not selected: return {'ok':False,'error':'没有启用的 MCP 服务'}
