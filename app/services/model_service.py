@@ -1,4 +1,4 @@
-import json, re, requests
+import json, re, time, requests
 
 def _repair_mojibake(value):
     value=str(value or '')
@@ -19,17 +19,23 @@ API_RETRIES = 3
 
 def _post_with_retry(url, **kwargs):
     last = None
+    retry_statuses = (408, 429, 500, 502, 503, 504)
     for attempt in range(API_RETRIES):
         try:
             response = requests.post(url, **kwargs)
-            if response.status_code >= 500 and attempt + 1 < API_RETRIES:
+            if response.status_code in retry_statuses and attempt + 1 < API_RETRIES:
+                time.sleep(1 + attempt)
                 continue
             return response
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
             last = exc
-            if attempt + 1 >= API_RETRIES:
-                raise
-    if last: raise last
+            if attempt + 1 < API_RETRIES:
+                time.sleep(1 + attempt)
+                continue
+            raise
+    if last:
+        raise last
+    raise requests.exceptions.RequestException('AI API 请求失败，已重试 %s 次' % API_RETRIES)
 
 def _json_objects(text):
     """Extract complete balanced JSON objects from model text."""
@@ -165,7 +171,7 @@ def run(model_id,messages,on_tool=None):
             if isinstance(exc, requests.exceptions.ReadTimeout):
                 raise ValueError('模型响应超时：模型服务未及时返回')
             if isinstance(exc, requests.exceptions.ConnectionError):
-                raise ValueError('模型连接失败：'+str(exc))
+                raise ValueError('模型连接失败（已自动重试 %s 次）：%s' % (API_RETRIES, str(exc)))
             raise ValueError('模型响应无效: '+str(exc))
         calls=_extract_tool_calls(msg)
         if calls:
@@ -218,7 +224,7 @@ def agent_stream(model_id, messages):
         except (requests.RequestException, ValueError, KeyError, IndexError, TypeError) as exc:
             if isinstance(exc, requests.exceptions.ConnectTimeout): raise ValueError('模型连接超时：无法连接模型服务')
             if isinstance(exc, requests.exceptions.ReadTimeout): raise ValueError('模型响应超时：模型服务未及时返回')
-            if isinstance(exc, requests.exceptions.ConnectionError): raise ValueError('模型连接失败：'+str(exc))
+            if isinstance(exc, requests.exceptions.ConnectionError): raise ValueError('模型连接失败（已自动重试 %s 次）：%s' % (API_RETRIES, str(exc)))
             raise ValueError('模型响应无效: '+str(exc))
         calls=_extract_tool_calls(msg)
         # Process exactly one call per model turn so narration and tool results stay ordered.
