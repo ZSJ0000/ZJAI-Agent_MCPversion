@@ -167,7 +167,7 @@
   function addToolCard(reply, data) {
     var item = reply && reply.parentNode;
     if (!item) return;
-    var key = String(data.name || data.tool_name || 'tool');
+    var key = String(data.display_name || data.name || data.tool_name || 'tool');
     var card = item.querySelector('.tool-card[data-tool-name="' + key.replace(/"/g, '&quot;') + '"]');
     if (data.type === 'tool_start') {
       card = document.createElement('div');
@@ -216,7 +216,7 @@
         }
         addToolCard(reply, data);
         box.scrollTop = box.scrollHeight;
-      } else if (data.type === 'delta') {
+      } else if (data.type === 'progress' || data.type === 'delta') {
         if (reply.classList.contains('reply-loading')) {
           reply.classList.remove('reply-loading');
           setRendered(reply, '');
