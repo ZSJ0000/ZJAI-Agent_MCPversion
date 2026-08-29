@@ -12,7 +12,7 @@ def _repair_mojibake(value):
             pass
     return value
 from .json_store import config
-from .mcp_service import list_tools, call_tool, diagnostics
+from .mcp_service import list_tools, call_tool
 from .skill_service import load_skills
 def _json_objects(text):
     """Extract complete balanced JSON objects from model text."""
@@ -98,7 +98,12 @@ def _body(m,messages,stream=False):
 def run(model_id,messages):
     m=_model(model_id); body=_body(m,messages); headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json'}
     for _ in range(5):
-        r=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120);r.raise_for_status();msg=r.json()['choices'][0]['message'];body['messages'].append(msg);calls=_extract_tool_calls(msg)
+        try:
+            r=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120)
+            r.raise_for_status(); data=r.json(); msg=data['choices'][0]['message']
+        except (requests.RequestException, ValueError, KeyError, IndexError, TypeError) as exc:
+            raise ValueError('模型响应无效: '+str(exc))
+        body['messages'].append(msg); calls=_extract_tool_calls(msg)
         if not calls:
             if msg.get('content'): msg['content']=_clean_tool_markup(msg.get('content'))
             return msg
