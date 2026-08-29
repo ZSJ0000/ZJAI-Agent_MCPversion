@@ -71,3 +71,7 @@
 .tool-head{display:flex;align-items:center;gap:8px;width:100%;min-height:42px;margin:0;padding:9px 12px;border:0;background:#000;color:#00ff00;text-align:left;font:14px Consolas,"Courier New",monospace;cursor:pointer}
 .tool-head:hover{background:#003300;color:#fff}.tool-head strong{font-weight:normal;color:#00ff00}.tool-state{color:#ffff00}.tool-time{margin-left:auto;color:#999}.tool-arrow{margin-left:5px;color:#999}.tool-spinner{display:inline-block;width:16px;color:#00ffff}.tool-spinner.tool-failed{color:#ff3333}.tool-spinner.tool-succeeded{color:#00ff00}.tool-card[data-tool-state="done"] .tool-spinner{color:#00ff00}.tool-card[data-tool-state="done"] .tool-state{color:#00ff00}.tool-card[data-tool-state="running"] .tool-spinner{animation:toolSpin 1s steps(4) infinite}@keyframes toolSpin{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}
 .tool-detail{display:block;padding:10px 12px;border-top:1px solid #26352b;color:#00ff00;line-height:1.45}.tool-detail:not(.show){display:none}.tool-label{margin:4px 0;color:#999;font-size:11px;letter-spacing:.08em}.tool-detail pre{margin:6px 0 12px;padding:9px;overflow:auto;border:1px solid #202c22;background:#111;color:#d8e0d8;white-space:pre-wrap;word-break:break-word;font:12px/1.45 Consolas,"Courier New",monospace}.tool-detail pre.tool-output{margin-bottom:0}.tool-card.tool-collapsed .tool-head{border-bottom:0}
+
+/* Tool details stay collapsed until the user clicks the tool header. */
+.tool-card .tool-detail{display:none!important}
+.tool-card .tool-detail.show{display:block!important}
