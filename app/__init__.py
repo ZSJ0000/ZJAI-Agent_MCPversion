@@ -191,6 +191,8 @@ def create_app():
                         elif event['type'] in ('tool_start','tool_result'):
                             tool_events.append(event)
                             yield 'data: '+json.dumps(event, ensure_ascii=False)+'\n\n'
+                        elif event['type'] == 'progress' and event.get('content'):
+                            yield 'data: '+json.dumps({'type':'progress','content':event['content']}, ensure_ascii=False)+'\n\n'
                         elif event['type'] == 'final' and event.get('content'):
                             parts.append(event['content'])
                             yield 'data: '+json.dumps({'type':'delta','content':event['content']}, ensure_ascii=False)+'\n\n'
