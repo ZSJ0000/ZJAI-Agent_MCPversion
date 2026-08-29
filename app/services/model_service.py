@@ -19,7 +19,14 @@ def _extract_tool_calls(message):
     if calls: return calls
     content=message.get('content') or ''
     found=[]
-    for match in re.findall(r'<tool_call>\s*(\{.*?\})\s*</tool_call>', content, re.S):
+    patterns=(
+        r'<tool_call>\s*(\{.*?\})\s*</tool_call>',
+        r'<\|tool_call_start\|>\s*(\{.*?\})\s*<\|tool_call_end\|>',
+        r'<tool_call_start>\s*(\{.*?\})\s*<tool_call_end>',
+    )
+    matches=[]
+    for pattern in patterns: matches.extend(re.findall(pattern, content, re.S))
+    for match in matches:
         try:
             item=json.loads(match); name=item.get('name') or item.get('function',{}).get('name')
             args=item.get('arguments', item.get('parameters', item.get('function',{}).get('arguments',{})))
@@ -27,6 +34,12 @@ def _extract_tool_calls(message):
             if name: found.append({'id':'text-call-'+str(len(found)+1),'type':'function','function':{'name':name,'arguments':json.dumps(args or {},ensure_ascii=False)}})
         except (ValueError,TypeError,AttributeError): continue
     return found
+
+def _clean_tool_markup(value):
+    value=str(value or '')
+    for pattern in (r'<tool_call>.*?</tool_call>', r'<\|tool_call_start\|>.*?<\|tool_call_end\|>', r'<tool_call_start>.*?<tool_call_end>'):
+        value=re.sub(pattern,'',value,flags=re.S)
+    return value.strip()
 
 def models(): return config('models.json', {'models':[]}).get('models',[])
 def _model(model_id):
@@ -44,7 +57,9 @@ def run(model_id,messages):
     m=_model(model_id); body=_body(m,messages); headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json'}
     for _ in range(5):
         r=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120);r.raise_for_status();msg=r.json()['choices'][0]['message'];body['messages'].append(msg);calls=_extract_tool_calls(msg)
-        if not calls:return msg
+        if not calls:
+            if msg.get('content'): msg['content']=_clean_tool_markup(msg.get('content'))
+            return msg
         for c in calls:
             result=call_tool(c['function']['name'],json.loads(c['function'].get('arguments') or '{}'));body['messages'].append({'role':'tool','tool_call_id':c.get('id',''),'name':c['function']['name'],'content':json.dumps(result,ensure_ascii=False)})
     raise ValueError('工具调用轮次超过限制')
