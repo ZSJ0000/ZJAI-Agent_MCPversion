@@ -103,9 +103,17 @@ def create_app():
     @app.get('/api/skills')
     def api_skills(): return jsonify(skills=load_skills())
     @app.get('/api/mcp/tools')
-    def api_tools(): return jsonify(tools=[{k:t.get(k) for k in ('name','description','inputSchema')} for t in list_tools()])
+    def api_tools():
+        try:
+            return jsonify(tools=[{k:t.get(k) for k in ('name','description','inputSchema')} for t in list_tools()])
+        except Exception as exc:
+            return jsonify(tools=[], error='MCP 工具获取失败: '+str(exc)), 502
     @app.get('/api/mcp/diagnostics')
-    def api_mcp_diagnostics(): return jsonify(diagnostics())
+    def api_mcp_diagnostics():
+        try:
+            return jsonify(diagnostics())
+        except Exception as exc:
+            return jsonify(tool_count=0, tools=[], errors=['诊断失败: '+str(exc)]), 502
     @app.get('/api/sessions')
     def api_sessions(): return jsonify(sessions=list_owned(uid()))
     @app.post('/api/sessions')
@@ -135,7 +143,10 @@ def create_app():
         if not current: return jsonify(error='会话不存在'), 404
         if not text: return jsonify(error='消息不能为空'), 400
         add_message(current['id'], 'user', text)
-        tool_mode=bool(list_tools())
+        try:
+            tool_mode=bool(list_tools())
+        except Exception as exc:
+            return jsonify(error='MCP 工具获取失败: '+str(exc), session_id=current['id']), 502
         if tool_mode:
             chunks=None
         else:
