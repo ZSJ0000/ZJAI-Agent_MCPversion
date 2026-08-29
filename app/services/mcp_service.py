@@ -61,11 +61,13 @@ def list_tools_details():
     return out,errors
 
 def list_tools():
+    return list_tools_details()[0]
+
+def availability_warning():
     tools,errors=list_tools_details()
-    enabled=[s for s in servers() if s.get('enabled',True) and s.get('url')]
-    if enabled and not tools and errors:
-        raise MCPError('；'.join(errors))
-    return tools
+    if errors:
+        return '当前MCP不可用：' + '；'.join(errors)
+    return ''
 def test_connection(server_id=None):
     selected=[s for s in servers() if s.get('enabled',True) and s.get('url') and (server_id is None or s.get('id')==server_id)]
     if not selected: return {'ok':False,'error':'没有启用的 MCP 服务'}
@@ -87,10 +89,10 @@ def call_tool(name,args):
     matches=[t for t in tools if t.get('name')==name]
     if not matches:
         detail='；'.join(errors) if errors else '当前工具列表中不存在该工具'
-        raise MCPError('MCP 工具不可用: %s；%s'%(name,detail))
+        return {'content':[{'type':'text','text':'当前MCP不可用：'+detail}], 'isError':True}
     for s in servers():
         if not s.get('enabled',True) or not s.get('url') or s.get('id')!=matches[0].get('_mcp_server'): continue
         result=_request(s,'tools/call',{'name':name,'arguments':args})
         if result.get('error'): raise MCPError('工具调用失败: '+json.dumps(result['error'],ensure_ascii=False))
         return result.get('result',{})
-    raise MCPError('MCP 服务不存在: '+name)
+    return {'content':[{'type':'text','text':'当前MCP不可用：MCP 服务不存在: '+name}], 'isError':True}
