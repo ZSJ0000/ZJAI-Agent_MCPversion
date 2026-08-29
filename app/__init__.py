@@ -140,6 +140,11 @@ def create_app():
         for item in sessions:
             if item.get('id')==sid: item['title']=title[:100]; current=item; break
         save_data('sessions.json',sessions); return jsonify(session=current)
+    def _tool_event_text(kind,name,value):
+        if kind=='start':
+            return '正在调用 MCP 工具：'+str(name)+'\n参数：'+json.dumps(value,ensure_ascii=False)
+        return 'MCP 工具返回：'+str(name)+'\n结果：'+json.dumps(value,ensure_ascii=False)
+
     @app.post('/api/chat/stream')
     def api_chat_stream():
         if not uid(): return jsonify(error='未登录'), 401
@@ -169,7 +174,13 @@ def create_app():
                     parts.append(mcp_warning + '\n\n')
                     yield 'data: '+json.dumps({'type':'delta','content':mcp_warning+'\n\n'}, ensure_ascii=False)+'\n\n'
                 if tool_mode:
-                    answer=run(x.get('model_id'), [{'role':m['role'],'content':m['content']} for m in get_messages(current['id'])])
+                    tool_events=[]
+                    def on_tool(kind,name,value): tool_events.append((kind,name,value))
+                    answer=run(x.get('model_id'), [{'role':m['role'],'content':m['content']} for m in get_messages(current['id'])], on_tool=on_tool)
+                    for kind,name,value in tool_events:
+                        event_text=_tool_event_text(kind,name,value)
+                        parts.append(event_text+'\n\n')
+                        yield 'data: '+json.dumps({'type':'tool_'+kind,'name':name,'data':value,'content':event_text}, ensure_ascii=False)+'\n\n'
                     text=answer.get('content','') or ''
                     if text:
                         parts.append(text)
