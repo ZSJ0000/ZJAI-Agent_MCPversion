@@ -14,25 +14,48 @@ def _repair_mojibake(value):
 from .json_store import config
 from .mcp_service import list_tools, call_tool
 from .skill_service import load_skills
+def _json_objects(text):
+    """Extract complete balanced JSON objects from model text."""
+    result=[]; starts=[]
+    for i,ch in enumerate(text):
+        if ch=='{': starts.append(i)
+        elif ch=='}' and starts:
+            begin=starts.pop()
+            if not starts:
+                candidate=text[begin:i+1]
+                try: result.append(json.loads(candidate))
+                except (ValueError,TypeError): pass
+    return result
+
 def _extract_tool_calls(message):
     calls=message.get('tool_calls') or []
     if calls: return calls
     content=message.get('content') or ''
+    regions=[]
+    for left,right in (
+        ('<tool_call>','</tool_call>'),
+        ('<|tool_call_start|>','<|tool_call_end|>'),
+        ('<tool_call_start>','<tool_call_end>'),
+    ):
+        pos=0
+        while True:
+            a=content.find(left,pos)
+            if a<0: break
+            a+=len(left); b=content.find(right,a)
+            if b<0: break
+            regions.append(content[a:b]); pos=b+len(right)
     found=[]
-    patterns=(
-        r'<tool_call>\s*(\{.*?\})\s*</tool_call>',
-        r'<\|tool_call_start\|>\s*(\{.*?\})\s*<\|tool_call_end\|>',
-        r'<tool_call_start>\s*(\{.*?\})\s*<tool_call_end>',
-    )
-    matches=[]
-    for pattern in patterns: matches.extend(re.findall(pattern, content, re.S))
-    for match in matches:
-        try:
-            item=json.loads(match); name=item.get('name') or item.get('function',{}).get('name')
-            args=item.get('arguments', item.get('parameters', item.get('function',{}).get('arguments',{})))
-            if isinstance(args,str): args=json.loads(args or '{}')
-            if name: found.append({'id':'text-call-'+str(len(found)+1),'type':'function','function':{'name':name,'arguments':json.dumps(args or {},ensure_ascii=False)}})
-        except (ValueError,TypeError,AttributeError): continue
+    for region in regions:
+        for item in _json_objects(region):
+            if not isinstance(item,dict): continue
+            fn=item.get('function') or {}
+            name=item.get('name') or fn.get('name')
+            args=item.get('arguments',item.get('parameters',fn.get('arguments',{})))
+            if isinstance(args,str):
+                try: args=json.loads(args or '{}')
+                except (ValueError,TypeError): continue
+            if name:
+                found.append({'id':'text-call-'+str(len(found)+1),'type':'function','function':{'name':name,'arguments':json.dumps(args or {},ensure_ascii=False)}})
     return found
 
 def _clean_tool_markup(value):
