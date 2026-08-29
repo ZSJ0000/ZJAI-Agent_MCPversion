@@ -115,7 +115,10 @@
     box.innerHTML = '';
     json('/api/sessions/' + encodeURIComponent(id)).then(function (data) {
       (data.messages || []).forEach(function (message) {
-        addMessage(message.role === 'user' ? '用户' : '助手', message.content);
+        var historyReply = addMessage(message.role === 'user' ? '用户' : '助手', message.content);
+        if (message.role !== 'user' && message.meta && message.meta.tool_events) {
+          message.meta.tool_events.forEach(function (event) { addToolCard(historyReply, event); });
+        }
       });
       markSelected();
     }).catch(function (error) {
