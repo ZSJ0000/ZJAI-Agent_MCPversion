@@ -188,8 +188,9 @@ def create_app():
                     for chunk in chunks:
                         parts.append(chunk)
                         yield 'data: '+json.dumps({'type':'delta','content':chunk}, ensure_ascii=False)+'\n\n'
-                add_message(current['id'], 'assistant', ''.join(parts))
-                yield 'data: '+json.dumps({'type':'done','session_id':current['id']}, ensure_ascii=False)+'\n\n'
+                meta = {'tool_events': [{'type': 'tool_'+kind, 'name': name, 'data': value} for kind, name, value in tool_events]} if tool_mode else {}
+                add_message(current['id'], 'assistant', ''.join(parts), meta)
+                yield 'data: '+json.dumps({'type':'done','session_id':current['id'],'tool_events':meta.get('tool_events',[])}, ensure_ascii=False)+'\n\n'
             except Exception as exc:
                 yield 'data: '+json.dumps({'type':'error','error':str(exc)}, ensure_ascii=False)+'\n\n'
         return Response(stream_with_context(generate()), mimetype='text/event-stream', headers={'Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no','Connection':'keep-alive'})
