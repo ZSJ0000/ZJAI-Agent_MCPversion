@@ -1,4 +1,4 @@
-import json, requests
+import json, re, requests
 
 def _repair_mojibake(value):
     value=str(value or '')
@@ -14,6 +14,20 @@ def _repair_mojibake(value):
 from .json_store import config
 from .mcp_service import list_tools, call_tool
 from .skill_service import load_skills
+def _extract_tool_calls(message):
+    calls=message.get('tool_calls') or []
+    if calls: return calls
+    content=message.get('content') or ''
+    found=[]
+    for match in re.findall(r'<tool_call>\s*(\{.*?\})\s*</tool_call>', content, re.S):
+        try:
+            item=json.loads(match); name=item.get('name') or item.get('function',{}).get('name')
+            args=item.get('arguments', item.get('parameters', item.get('function',{}).get('arguments',{})))
+            if isinstance(args,str): args=json.loads(args or '{}')
+            if name: found.append({'id':'text-call-'+str(len(found)+1),'type':'function','function':{'name':name,'arguments':json.dumps(args or {},ensure_ascii=False)}})
+        except (ValueError,TypeError,AttributeError): continue
+    return found
+
 def models(): return config('models.json', {'models':[]}).get('models',[])
 def _model(model_id):
     m=next((x for x in models() if x.get('id')==model_id and x.get('enabled',True)),None)
@@ -29,7 +43,7 @@ def _body(m,messages,stream=False):
 def run(model_id,messages):
     m=_model(model_id); body=_body(m,messages); headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json'}
     for _ in range(5):
-        r=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120);r.raise_for_status();msg=r.json()['choices'][0]['message'];body['messages'].append(msg);calls=msg.get('tool_calls') or []
+        r=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120);r.raise_for_status();msg=r.json()['choices'][0]['message'];body['messages'].append(msg);calls=_extract_tool_calls(msg)
         if not calls:return msg
         for c in calls:
             result=call_tool(c['function']['name'],json.loads(c['function'].get('arguments') or '{}'));body['messages'].append({'role':'tool','tool_call_id':c.get('id',''),'name':c['function']['name'],'content':json.dumps(result,ensure_ascii=False)})
