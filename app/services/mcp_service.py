@@ -6,6 +6,8 @@ def servers(): return config('mcp.json',{'servers':[]}).get('servers',[])
 
 def _headers(s):
     h=dict(s.get('headers') or {})
+    if not s.get('oauth_enabled', bool(h.get('Authorization'))):
+        h.pop('Authorization',None)
     h.setdefault('Accept','application/json, text/event-stream')
     return h
 
