@@ -264,8 +264,9 @@
     addMessage('用户', text);
     var reply = loadingMessage();
     input.value = '';
+    var attachments = window.chatAttachments || [];
     window.chatAttachments = [];
-    var requestOptions = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' }, body: JSON.stringify({ message: text, model_id: model.value, session_id: sid, attachments: window.chatAttachments || [] }) };
+    var requestOptions = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' }, body: JSON.stringify({ message: text, model_id: model.value, session_id: sid, attachments: attachments }) };
     if (window.AbortController) { activeRequest = new AbortController(); requestOptions.signal = activeRequest.signal; }
     fetch('/api/chat/stream', requestOptions).then(function (response) {
       if (!response.ok) return response.json().then(function (data) { throw new Error(data.error || '后端请求失败'); });
