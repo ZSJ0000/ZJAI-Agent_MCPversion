@@ -14,6 +14,23 @@ def _repair_mojibake(value):
 from .json_store import config
 from .mcp_service import list_tools, call_tool, availability_warning
 from .skill_service import load_skills
+
+API_RETRIES = 3
+
+def _post_with_retry(url, **kwargs):
+    last = None
+    for attempt in range(API_RETRIES):
+        try:
+            response = requests.post(url, **kwargs)
+            if response.status_code >= 500 and attempt + 1 < API_RETRIES:
+                continue
+            return response
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            last = exc
+            if attempt + 1 >= API_RETRIES:
+                raise
+    if last: raise last
+
 def _json_objects(text):
     """Extract complete balanced JSON objects from model text."""
     result=[]; starts=[]
@@ -139,7 +156,7 @@ def run(model_id,messages,on_tool=None):
     # Allow chained tool calls while retaining a hard safety limit.
     for _ in range(12):
         try:
-            r=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=(15,120))
+            r=_post_with_retry(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=(15,120))
             r.raise_for_status(); data=r.json(); msg=data['choices'][0]['message']
         except (requests.RequestException, ValueError, KeyError, IndexError, TypeError) as exc:
             if isinstance(exc, requests.exceptions.ConnectTimeout):
@@ -173,7 +190,7 @@ def stream_reply(model_id, messages):
     if list_tools(): return None
     m=_model(model_id); body=_body(m,messages,True)
     headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json','Accept':'text/event-stream','Accept-Charset':'utf-8'}
-    response=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120,stream=True)
+    response=_post_with_retry(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120,stream=True)
     response.raise_for_status(); response.encoding='utf-8'
     def chunks():
         for raw in response.iter_lines(decode_unicode=True):
