@@ -257,7 +257,8 @@
     addMessage('用户', text);
     var reply = loadingMessage();
     input.value = '';
-    var requestOptions = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' }, body: JSON.stringify({ message: text, model_id: model.value, session_id: sid }) };
+    window.chatAttachments = [];
+    var requestOptions = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' }, body: JSON.stringify({ message: text, model_id: model.value, session_id: sid, attachments: window.chatAttachments || [] }) };
     if (window.AbortController) { activeRequest = new AbortController(); requestOptions.signal = activeRequest.signal; }
     fetch('/api/chat/stream', requestOptions).then(function (response) {
       if (!response.ok) return response.json().then(function (data) { throw new Error(data.error || '后端请求失败'); });
@@ -335,13 +336,20 @@
   if (document.getElementById('file-input')) document.getElementById('file-input').onchange = function () {
     var file = this.files && this.files[0];
     if (!file) return;
-    var allowed = /\.(txt|md|py|js|json|html|css|bat|sh|yaml|yml|xml|csv|ini|log)$/i.test(file.name);
-    if (!allowed) { setStatus('● 仅支持文本和代码文件'); this.value = ''; return; }
-    if (file.size > 1024 * 1024) { setStatus('● 文件不能超过 1 MB'); this.value = ''; return; }
+    if (file.size > 10 * 1024 * 1024) { setStatus('● 文件不能超过 10 MB'); this.value = ''; return; }
+    window.chatAttachments = window.chatAttachments || [];
+    var item = {name: file.name, type: file.type || 'application/octet-stream', size: file.size};
     var reader = new FileReader();
-    reader.onload = function () { input.value += (input.value ? '\n\n' : '') + '[文件: ' + file.name + ']\n' + reader.result; input.focus(); setStatus('● 已载入 ' + file.name); };
+    reader.onload = function () {
+      var isImage = /^image\//i.test(item.type);
+      var isText = /^(text\/|application\/(json|javascript|xml|yaml|x-yaml)|.*(javascript|json|xml|yaml|csv|plain).*)$/i.test(item.type) || /\.(txt|md|py|js|json|html|css|bat|sh|yaml|yml|xml|csv|ini|log)$/i.test(file.name);
+      if (isImage || isText) item.data = reader.result;
+      window.chatAttachments.push(item);
+      input.value += (input.value ? '\n\n' : '') + '[附件: ' + file.name + ' (' + (item.type || '未知类型') + ')]';
+      input.focus(); setStatus('● 已载入 ' + file.name);
+    };
     reader.onerror = function () { setStatus('● 文件读取失败'); };
-    reader.readAsText(file, 'utf-8');
+    if (/^image\//i.test(file.type)) reader.readAsDataURL(file); else reader.readAsText(file, 'utf-8');
     this.value = '';
   };
   var cancelButton = byId('cancel');
