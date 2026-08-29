@@ -134,7 +134,8 @@ def _body(m,messages,stream=False):
 
 def run(model_id,messages,on_tool=None):
     m=_model(model_id); body=_body(m,messages); headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json'}
-    for _ in range(5):
+    # Allow chained tool calls while retaining a hard safety limit.
+    for _ in range(12):
         try:
             r=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=(15,120))
             r.raise_for_status(); data=r.json(); msg=data['choices'][0]['message']
