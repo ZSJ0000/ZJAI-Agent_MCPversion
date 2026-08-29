@@ -156,7 +156,7 @@ def create_app():
         if not text: return jsonify(error='消息不能为空'), 400
         add_message(current['id'], 'user', text)
         mcp_warning=''
-        history=history
+        history=[{'role':m['role'],'content':m['content']} for m in get_messages(current['id'])]
         if attachments:
             parts=[{'type':'text','text':text}]
             for a in attachments:
