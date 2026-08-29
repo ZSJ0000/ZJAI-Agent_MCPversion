@@ -235,7 +235,7 @@ def agent_stream(model_id, messages):
             if answer.get('content','').strip() in ('操作成功','操作完成','执行成功','已完成操作'): answer['content']=''
             yield {'type':'final','content':answer.get('content','') or ''}
             return
-        body['messages'].append(_normalize_tool_message(msg,calls))
+        body['messages'].append(_normalize_tool_message({'role':'assistant','content':None},calls))
         for c in calls:
             name=c.get('function',{}).get('name','')
             try: args=json.loads(c.get('function',{}).get('arguments') or '{}')
