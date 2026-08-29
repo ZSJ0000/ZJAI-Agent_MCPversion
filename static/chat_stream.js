@@ -168,7 +168,14 @@
       var raw = payload.join('\n');
       if (raw === '[DONE]') return;
       var data = JSON.parse(raw);
-      if (data.type === 'delta') {
+      if (data.type === 'tool_start' || data.type === 'tool_result') {
+        if (reply.classList.contains('reply-loading')) {
+          reply.classList.remove('reply-loading');
+          setRendered(reply, '');
+        }
+        setRendered(reply, (reply.dataset.raw || '') + (data.content || '') + '\n\n');
+        box.scrollTop = box.scrollHeight;
+      } else if (data.type === 'delta') {
         if (reply.classList.contains('reply-loading')) {
           reply.classList.remove('reply-loading');
           setRendered(reply, '');
@@ -216,8 +223,7 @@
       return readStream(response, reply);
     }).catch(function (error) {
       reply.classList.remove('reply-loading');
-      setRendered(reply, '错误：' + error.message);
-      setStatus('● 异常');
+      if (error && error.name === 'AbortError') { setRendered(reply, '请求已取消'); setStatus('● 已取消'); } else { setRendered(reply, '错误：' + error.message); setStatus('● 异常'); }
     }).then(function () {
       if (getStatus() !== '● 异常' && getStatus() !== '● 已取消') setStatus('● 就绪');
       busy = false; activeRequest = null;
