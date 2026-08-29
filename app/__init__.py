@@ -133,16 +133,26 @@ def create_app():
         if not current: return jsonify(error='会话不存在'), 404
         if not text: return jsonify(error='消息不能为空'), 400
         add_message(current['id'], 'user', text)
-        try:
-            chunks=stream_reply(x.get('model_id'), [{'role':m['role'],'content':m['content']} for m in get_messages(current['id'])])
-            if chunks is None: return jsonify(error='当前会话包含工具调用，请使用普通响应模式', session_id=current['id']), 409
-        except Exception as exc: return jsonify(error=str(exc), session_id=current['id']), 502
+        tool_mode=bool(list_tools())
+        if tool_mode:
+            chunks=None
+        else:
+            try:
+                chunks=stream_reply(x.get('model_id'), [{'role':m['role'],'content':m['content']} for m in get_messages(current['id'])])
+            except Exception as exc: return jsonify(error=str(exc), session_id=current['id']), 502
         def generate():
             parts=[]
             try:
-                for chunk in chunks:
-                    parts.append(chunk)
-                    yield 'data: '+json.dumps({'type':'delta','content':chunk}, ensure_ascii=False)+'\n\n'
+                if tool_mode:
+                    answer=run(x.get('model_id'), [{'role':m['role'],'content':m['content']} for m in get_messages(current['id'])])
+                    text=answer.get('content','') or ''
+                    if text:
+                        parts.append(text)
+                        yield 'data: '+json.dumps({'type':'delta','content':text}, ensure_ascii=False)+'\n\n'
+                else:
+                    for chunk in chunks:
+                        parts.append(chunk)
+                        yield 'data: '+json.dumps({'type':'delta','content':chunk}, ensure_ascii=False)+'\n\n'
                 add_message(current['id'], 'assistant', ''.join(parts))
                 yield 'data: '+json.dumps({'type':'done','session_id':current['id']}, ensure_ascii=False)+'\n\n'
             except Exception as exc:
