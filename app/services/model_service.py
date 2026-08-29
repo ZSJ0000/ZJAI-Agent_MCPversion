@@ -204,3 +204,36 @@ def stream_reply(model_id, messages):
             except (ValueError,TypeError,IndexError,KeyError): continue
     return chunks()
 
+
+
+def agent_stream(model_id, messages):
+    """Yield Agent events in execution order: plan, tools, then final answer."""
+    m=_model(model_id); body=_body(m,messages); headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json'}
+    yield {'type':'plan','content':'分析任务并按需要执行工具'}
+    for _ in range(12):
+        try:
+            r=_post_with_retry(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=(15,120))
+            r.raise_for_status(); msg=r.json()['choices'][0]['message']
+        except (requests.RequestException, ValueError, KeyError, IndexError, TypeError) as exc:
+            if isinstance(exc, requests.exceptions.ConnectTimeout): raise ValueError('模型连接超时：无法连接模型服务')
+            if isinstance(exc, requests.exceptions.ReadTimeout): raise ValueError('模型响应超时：模型服务未及时返回')
+            if isinstance(exc, requests.exceptions.ConnectionError): raise ValueError('模型连接失败：'+str(exc))
+            raise ValueError('模型响应无效: '+str(exc))
+        calls=_extract_tool_calls(msg)
+        if not calls:
+            answer=dict(msg)
+            answer['content']=_clean_tool_markup(answer.get('content','') or '')
+            if answer.get('content','').strip() in ('操作成功','操作完成','执行成功','已完成操作'): answer['content']=''
+            yield {'type':'final','content':answer.get('content','') or ''}
+            return
+        body['messages'].append(_normalize_tool_message(msg,calls))
+        for c in calls:
+            name=c.get('function',{}).get('name','')
+            try: args=json.loads(c.get('function',{}).get('arguments') or '{}')
+            except (ValueError,TypeError): args={}
+            yield {'type':'tool_start','name':name or 'tool','data':args}
+            try: result=call_tool(name,args)
+            except Exception as exc: result={'content':[{'type':'text','text':'当前MCP不可用：'+str(exc)}], 'isError':True}
+            yield {'type':'tool_result','name':name or 'tool','data':result}
+            body['messages'].append({'role':'tool','tool_call_id':c.get('id',''),'name':name,'content':json.dumps(result,ensure_ascii=False)})
+    raise ValueError('工具调用轮次超过限制')
