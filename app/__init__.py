@@ -150,11 +150,21 @@ def create_app():
         if not uid(): return jsonify(error='未登录'), 401
         x=request.get_json(silent=True) or {}
         text=(x.get('message') or '').strip()
+        attachments=x.get('attachments') or []
         current=owned(uid(), x.get('session_id')) if x.get('session_id') else create(uid())
         if not current: return jsonify(error='会话不存在'), 404
         if not text: return jsonify(error='消息不能为空'), 400
         add_message(current['id'], 'user', text)
         mcp_warning=''
+        history=history
+        if attachments:
+            parts=[{'type':'text','text':text}]
+            for a in attachments:
+                if isinstance(a,dict) and a.get('data','').startswith('data:image/'):
+                    parts.append({'type':'image_url','image_url':{'url':a.get('data')}})
+                elif isinstance(a,dict):
+                    parts.append({'type':'text','text':'附件：%s，类型：%s，大小：%s 字节' % (a.get('name','未知'),a.get('type','未知'),a.get('size',0))})
+            history[-1]['content']=parts
         try:
             tool_mode=bool(list_tools())
             if not tool_mode: mcp_warning=user_connection_warning()
@@ -165,7 +175,7 @@ def create_app():
             chunks=None
         else:
             try:
-                chunks=stream_reply(x.get('model_id'), [{'role':m['role'],'content':m['content']} for m in get_messages(current['id'])])
+                chunks=stream_reply(x.get('model_id'), history)
             except Exception as exc: return jsonify(error=str(exc), session_id=current['id']), 502
         def generate():
             parts=[]
@@ -176,7 +186,7 @@ def create_app():
                     yield 'data: '+json.dumps({'type':'delta','content':mcp_warning+'\n\n'}, ensure_ascii=False)+'\n\n'
                 if tool_mode:
                     def on_tool(kind,name,value): tool_events.append((kind,name,value))
-                    answer=run(x.get('model_id'), [{'role':m['role'],'content':m['content']} for m in get_messages(current['id'])], on_tool=on_tool)
+                    answer=run(x.get('model_id'), history, on_tool=on_tool)
                     for kind,name,value in tool_events:
                         event_text=_tool_event_text(kind,name,value)
                         yield 'data: '+json.dumps({'type':'tool_'+kind,'name':name,'data':value,'content':event_text}, ensure_ascii=False)+'\n\n'
