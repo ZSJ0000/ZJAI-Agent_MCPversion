@@ -77,3 +77,5 @@
 .tool-card .tool-detail.show{display:block!important}
 
 .agent-error{flex:1 1 100%;margin-left:60px;margin-top:10px;padding:10px;border:1px solid #ff3333;color:#ff3333;background:#110000;white-space:pre-wrap;word-break:break-word}
+
+.attach-menu-wrap{position:relative;display:inline-flex;align-items:center}.attach-menu{display:none;position:absolute;z-index:30;left:0;bottom:48px;width:190px;padding:6px;border:1px solid #444;background:#1b1c1f;box-shadow:0 4px 14px #000}.attach-menu.show{display:block}.attach-menu-item{display:block;width:100%;margin:0;padding:10px 8px;border:0;background:transparent;color:#e8edf3;text-align:left;font:14px Consolas,"Courier New",monospace;cursor:pointer}.attach-menu-item:hover{background:#08090b;color:#fff}.attach-menu-item:first-child{border-radius:8px 8px 0 0}.attach-menu-item:last-child{border-radius:0 0 8px 8px}
