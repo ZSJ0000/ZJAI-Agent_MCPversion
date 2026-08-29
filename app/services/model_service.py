@@ -75,9 +75,14 @@ def _extract_tool_calls(message):
                 break
     return found
 
+def _normalize_tool_message(message, calls):
+    if not calls: return message
+    normalized={'role':'assistant','content':None,'tool_calls':calls}
+    return normalized
+
 def _clean_tool_markup(value):
     value=str(value or '')
-    for pattern in (r'<tool_call>.*?</tool_call>', r'<\|tool_call_start\|>.*?<\|tool_call_end\|>', r'<tool_call_start>.*?<tool_call_end>'):
+    for pattern in (r'<tool_call>.*?</tool_call>', r'<\|tool_call_start\|>.*?<\|tool_call_end\|>', r'<tool_call_start>.*?<tool_call_end>', r'[A-Za-z_][\w.-]*\s*\(\s*\{.*?\}\s*\)'):
         value=re.sub(pattern,'',value,flags=re.S)
     return value.strip()
 
@@ -103,7 +108,11 @@ def run(model_id,messages):
             r.raise_for_status(); data=r.json(); msg=data['choices'][0]['message']
         except (requests.RequestException, ValueError, KeyError, IndexError, TypeError) as exc:
             raise ValueError('模型响应无效: '+str(exc))
-        body['messages'].append(msg); calls=_extract_tool_calls(msg)
+        calls=_extract_tool_calls(msg)
+        if calls:
+            body['messages'].append(_normalize_tool_message(msg,calls))
+        else:
+            body['messages'].append(msg)
         if not calls:
             if msg.get('content'): msg['content']=_clean_tool_markup(msg.get('content'))
             return msg
