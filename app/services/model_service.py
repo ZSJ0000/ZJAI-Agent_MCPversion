@@ -169,7 +169,7 @@ def run(model_id,messages,on_tool=None):
             raise ValueError('模型响应无效: '+str(exc))
         calls=_extract_tool_calls(msg)
         if calls:
-            body['messages'].append(_normalize_tool_message(msg,calls))
+            body['messages'].append(_normalize_tool_message({'role':'assistant','content':None},calls))
         else:
             body['messages'].append(msg)
         if not calls:
