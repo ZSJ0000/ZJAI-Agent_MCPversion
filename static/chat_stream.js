@@ -167,7 +167,7 @@
   function addToolCard(reply, data) {
     var item = reply && reply.parentNode;
     if (!item) return;
-    var key = String(data.name || 'MCP 工具');
+    var key = String(data.name || data.tool_name || 'tool');
     var card = item.querySelector('.tool-card[data-tool-name="' + key.replace(/"/g, '&quot;') + '"]');
     if (data.type === 'tool_start') {
       card = document.createElement('div');
