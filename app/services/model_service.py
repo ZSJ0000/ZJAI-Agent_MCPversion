@@ -132,13 +132,19 @@ def _body(m,messages,stream=False):
     if ts:b["tools"]=[{"type":"function","function":{"name":t["name"],"description":t.get("description",""),"parameters":t.get("inputSchema",{})}} for t in ts]
     return b
 
-def run(model_id,messages):
+def run(model_id,messages,on_tool=None):
     m=_model(model_id); body=_body(m,messages); headers={'Authorization':'Bearer '+m.get('api_key',''),'Content-Type':'application/json'}
     for _ in range(5):
         try:
-            r=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=120)
+            r=requests.post(m['base_url'].rstrip('/')+'/chat/completions',json=body,headers=headers,timeout=(15,120))
             r.raise_for_status(); data=r.json(); msg=data['choices'][0]['message']
         except (requests.RequestException, ValueError, KeyError, IndexError, TypeError) as exc:
+            if isinstance(exc, requests.exceptions.ConnectTimeout):
+                raise ValueError('模型连接超时：无法连接模型服务')
+            if isinstance(exc, requests.exceptions.ReadTimeout):
+                raise ValueError('模型响应超时：模型服务未及时返回')
+            if isinstance(exc, requests.exceptions.ConnectionError):
+                raise ValueError('模型连接失败：'+str(exc))
             raise ValueError('模型响应无效: '+str(exc))
         calls=_extract_tool_calls(msg)
         if calls:
@@ -149,11 +155,16 @@ def run(model_id,messages):
             if msg.get('content'): msg['content']=_clean_tool_markup(msg.get('content'))
             return msg
         for c in calls:
+            tool_name=c.get('function',{}).get('name','')
+            try: tool_args=json.loads(c.get('function',{}).get('arguments') or '{}')
+            except (ValueError,TypeError): tool_args={}
+            if on_tool: on_tool('start',tool_name,tool_args)
             try:
-                result=call_tool(c['function']['name'],json.loads(c['function'].get('arguments') or '{}'))
+                result=call_tool(tool_name,tool_args)
             except Exception as exc:
                 result={'content':[{'type':'text','text':'当前MCP不可用：'+str(exc)}], 'isError':True}
-            body['messages'].append({'role':'tool','tool_call_id':c.get('id',''),'name':c['function']['name'],'content':json.dumps(result,ensure_ascii=False)})
+            if on_tool: on_tool('result',tool_name,result)
+            body['messages'].append({'role':'tool','tool_call_id':c.get('id',''),'name':tool_name,'content':json.dumps(result,ensure_ascii=False)})
     raise ValueError('工具调用轮次超过限制')
 def stream_reply(model_id, messages):
     if list_tools(): return None
