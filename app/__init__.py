@@ -5,7 +5,7 @@ from .services.json_store import ensure_dirs, save_config, config, data, save_da
 from .services.auth_service import initialized, authenticate, create_user, users, public_user, set_enabled
 from .services.model_service import models, run, stream_reply
 from .services.skill_service import load_skills
-from .services.mcp_service import list_tools, diagnostics
+from .services.mcp_service import list_tools, diagnostics, test_connection
 from .services.session_service import create, owned, list_owned, get_messages, add_message, delete
 
 def _admin_required(session):
@@ -108,6 +108,12 @@ def create_app():
             return jsonify(tools=[{k:t.get(k) for k in ('name','description','inputSchema')} for t in list_tools()])
         except Exception as exc:
             return jsonify(tools=[], error='MCP 工具获取失败: '+str(exc)), 502
+    @app.post('/AdminX/api/mcp/test')
+    def api_mcp_test():
+        if not admin(): return jsonify(error='无权限'),403
+        x=request.get_json(silent=True) or {}
+        result=test_connection(x.get('id'))
+        return jsonify(result), (200 if result.get('ok') else 502)
     @app.get('/api/mcp/diagnostics')
     def api_mcp_diagnostics():
         try:
