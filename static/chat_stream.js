@@ -155,6 +155,44 @@
     });
   }
 
+  function toolText(value) {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'string') return value;
+    try { return JSON.stringify(value, null, 2); } catch (e) { return String(value); }
+  }
+
+  function addToolCard(reply, data) {
+    var item = reply && reply.parentNode;
+    if (!item) return;
+    var key = String(data.name || 'MCP 工具');
+    var card = item.querySelector('.tool-card[data-tool-name="' + key.replace(/"/g, '&quot;') + '"]');
+    if (data.type === 'tool_start') {
+      card = document.createElement('div');
+      card.className = 'tool-card';
+      card.setAttribute('data-tool-name', key);
+      card.setAttribute('data-tool-state', 'running');
+      card.setAttribute('data-started', String(new Date().getTime()));
+      var head = document.createElement('button'); head.type = 'button'; head.className = 'tool-head';
+      head.innerHTML = '<span class="tool-spinner">◌</span> <span class="tool-state">运行中</span> <strong></strong><span class="tool-time"></span><span class="tool-arrow">⌄</span>';
+      var detail = document.createElement('div'); detail.className = 'tool-detail show';
+      detail.innerHTML = '<div class="tool-label">INPUT</div><pre class="tool-input"></pre><div class="tool-label">OUTPUT</div><pre class="tool-output">等待工具返回...</pre>';
+      head.onclick = function () { detail.classList.toggle('show'); card.classList.toggle('tool-collapsed', !detail.classList.contains('show')); };
+      card.appendChild(head); card.appendChild(detail); item.appendChild(card);
+      card.querySelector('strong').textContent = key;
+      card.querySelector('.tool-input').textContent = toolText(data.data || {});
+      return;
+    }
+    var cards = item.querySelectorAll('.tool-card');
+    for (var i = cards.length - 1; i >= 0; i--) if (cards[i].getAttribute('data-tool-name') === key && cards[i].getAttribute('data-tool-state') === 'running') { card = cards[i]; break; }
+    if (!card) { addToolCard(reply, {type:'tool_start', name:key, data:{}}); return addToolCard(reply, data); }
+    card.setAttribute('data-tool-state', 'done');
+    var elapsed = new Date().getTime() - Number(card.getAttribute('data-started') || new Date().getTime());
+    var state = card.querySelector('.tool-state'); if (state) state.textContent = data.data && data.data.isError ? '失败' : '完成';
+    var spinner = card.querySelector('.tool-spinner'); if (spinner) spinner.textContent = data.data && data.data.isError ? '⚠' : '✓';
+    var time = card.querySelector('.tool-time'); if (time) time.textContent = elapsed + 'ms';
+    var output = card.querySelector('.tool-output'); if (output) output.textContent = toolText(data.data);
+  }
+
   function readStream(response, reply) {
     if (!response.body || !response.body.getReader) throw new Error('当前浏览器不支持流式读取，请使用最新版 Chrome 或 Edge');
     var reader = response.body.getReader();
@@ -173,7 +211,7 @@
           reply.classList.remove('reply-loading');
           setRendered(reply, '');
         }
-        setRendered(reply, (reply.dataset.raw || '') + (data.content || '') + '\n\n');
+        addToolCard(reply, data);
         box.scrollTop = box.scrollHeight;
       } else if (data.type === 'delta') {
         if (reply.classList.contains('reply-loading')) {
