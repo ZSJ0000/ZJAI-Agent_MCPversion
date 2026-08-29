@@ -5,7 +5,7 @@ from .services.json_store import ensure_dirs, save_config, config, data, save_da
 from .services.auth_service import initialized, authenticate, create_user, users, public_user, set_enabled
 from .services.model_service import models, run, stream_reply
 from .services.skill_service import load_skills
-from .services.mcp_service import list_tools
+from .services.mcp_service import list_tools, diagnostics
 from .services.session_service import create, owned, list_owned, get_messages, add_message, delete
 
 def _admin_required(session):
@@ -104,6 +104,8 @@ def create_app():
     def api_skills(): return jsonify(skills=load_skills())
     @app.get('/api/mcp/tools')
     def api_tools(): return jsonify(tools=[{k:t.get(k) for k in ('name','description','inputSchema')} for t in list_tools()])
+    @app.get('/api/mcp/diagnostics')
+    def api_mcp_diagnostics(): return jsonify(diagnostics())
     @app.get('/api/sessions')
     def api_sessions(): return jsonify(sessions=list_owned(uid()))
     @app.post('/api/sessions')
