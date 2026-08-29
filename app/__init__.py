@@ -179,7 +179,6 @@ def create_app():
                     answer=run(x.get('model_id'), [{'role':m['role'],'content':m['content']} for m in get_messages(current['id'])], on_tool=on_tool)
                     for kind,name,value in tool_events:
                         event_text=_tool_event_text(kind,name,value)
-                        parts.append(event_text+'\n\n')
                         yield 'data: '+json.dumps({'type':'tool_'+kind,'name':name,'data':value,'content':event_text}, ensure_ascii=False)+'\n\n'
                     text=answer.get('content','') or ''
                     if text:
