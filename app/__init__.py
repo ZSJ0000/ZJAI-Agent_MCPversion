@@ -5,7 +5,7 @@ from .services.json_store import ensure_dirs, save_config, config, data, save_da
 from .services.auth_service import initialized, authenticate, create_user, users, public_user, set_enabled
 from .services.model_service import models, run, stream_reply
 from .services.skill_service import load_skills
-from .services.mcp_service import list_tools, diagnostics, test_connection
+from .services.mcp_service import list_tools, diagnostics, test_connection, availability_warning
 from .services.session_service import create, owned, list_owned, get_messages, add_message, delete
 
 def _admin_required(session):
@@ -107,7 +107,7 @@ def create_app():
         try:
             return jsonify(tools=[{k:t.get(k) for k in ('name','description','inputSchema')} for t in list_tools()])
         except Exception as exc:
-            return jsonify(tools=[], error='MCP 工具获取失败: '+str(exc)), 502
+            return jsonify(tools=[], warning='MCP 暂不可用: '+str(exc)), 200
     @app.post('/AdminX/api/mcp/test')
     def api_mcp_test():
         if not admin(): return jsonify(error='无权限'),403
@@ -151,8 +151,8 @@ def create_app():
         add_message(current['id'], 'user', text)
         try:
             tool_mode=bool(list_tools())
-        except Exception as exc:
-            return jsonify(error='MCP 工具获取失败: '+str(exc), session_id=current['id']), 502
+        except Exception:
+            tool_mode=False
         if tool_mode:
             chunks=None
         else:
