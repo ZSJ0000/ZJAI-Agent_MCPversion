@@ -1,4 +1,5 @@
 import json, requests, uuid
+from urllib.parse import urljoin
 from .json_store import config
 class MCPError(Exception): pass
 
@@ -15,7 +16,7 @@ def _sse_endpoint(s,h):
     r=requests.get(s['url'],headers=h,stream=True,timeout=30,verify=s.get('verify_ssl',True)); r.raise_for_status()
     for raw in r.iter_lines(decode_unicode=True):
         line=(raw or '').strip()
-        if line.startswith('data:') and line[5:].strip(): return line[5:].strip()
+        if line.startswith('data:') and line[5:].strip(): return urljoin(s['url'], line[5:].strip())
     raise MCPError('SSE 未返回 endpoint')
 
 def _json_response(r):
