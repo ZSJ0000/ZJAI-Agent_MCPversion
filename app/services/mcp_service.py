@@ -16,9 +16,15 @@ def _json_response(r):
     try: return r.json() if text==r.text.strip() else json.loads(text)
     except ValueError: raise MCPError('MCP 返回不是 JSON: '+text[:300])
 
-def _post(url,payload,h,s):
-    r=requests.post(url,json=payload,headers=h,timeout=60,verify=s.get('verify_ssl',True)); r.raise_for_status()
+def _post(url,payload,h,s,expect_json=True):
+    try:
+        r=requests.post(url,json=payload,headers=h,timeout=60,verify=s.get('verify_ssl',True))
+    except requests.RequestException as exc:
+        raise MCPError('请求 %s 失败: %s' % (url,exc))
+    if not r.ok:
+        raise MCPError('请求 %s 返回 HTTP %s: %s' % (url,r.status_code,r.text[:300]))
     sid=r.headers.get('Mcp-Session-Id') or r.headers.get('mcp-session-id')
+    if not expect_json or not r.text.strip(): return {},sid
     return _json_response(r),sid
 
 def _sse_endpoint(s,h):
@@ -37,8 +43,8 @@ def _request(s,method,params=None):
     init,sid=_post(s['url'],init_payload,h,s)
     if sid: h['Mcp-Session-Id']=sid
     if init.get('error'): raise MCPError('initialize 失败: '+json.dumps(init['error'],ensure_ascii=False))
-    try: requests.post(s['url'],json={'jsonrpc':'2.0','method':'notifications/initialized','params':{}},headers=h,timeout=30,verify=s.get('verify_ssl',True))
-    except requests.RequestException: pass
+    try: _post(s['url'],{'jsonrpc':'2.0','method':'notifications/initialized','params':{}},h,s,False)
+    except MCPError: pass
     result,_=_post(s['url'],payload,h,s)
     return result
 
@@ -54,7 +60,12 @@ def list_tools_details():
         except Exception as exc: errors.append('%s [%s]: %s'%(s.get('name') or s.get('id') or 'MCP',s.get('url'),exc))
     return out,errors
 
-def list_tools(): return list_tools_details()[0]
+def list_tools():
+    tools,errors=list_tools_details()
+    enabled=[s for s in servers() if s.get('enabled',True) and s.get('url')]
+    if enabled and not tools and errors:
+        raise MCPError('；'.join(errors))
+    return tools
 def diagnostics():
     tools,errors=list_tools_details()
     return {'servers':[{'id':s.get('id'),'name':s.get('name'),'url':s.get('url'),'protocol':s.get('protocol'),'enabled':s.get('enabled',True)} for s in servers()], 'tool_count':len(tools), 'tools':[t.get('name') for t in tools], 'errors':errors}
