@@ -220,6 +220,12 @@ def agent_stream(model_id, messages):
             if isinstance(exc, requests.exceptions.ConnectionError): raise ValueError('模型连接失败：'+str(exc))
             raise ValueError('模型响应无效: '+str(exc))
         calls=_extract_tool_calls(msg)
+        # Preserve the model's progress narration before the tool card.
+        # This enables the natural Agent sequence: text -> tool -> text -> tool.
+        if calls:
+            progress=_clean_tool_markup(msg.get('content','') or '')
+            if progress and progress not in ('操作成功','操作完成','执行成功','已完成操作'):
+                yield {'type':'progress','content':progress}
         if not calls:
             answer=dict(msg)
             answer['content']=_clean_tool_markup(answer.get('content','') or '')
