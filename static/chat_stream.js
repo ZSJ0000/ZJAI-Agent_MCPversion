@@ -190,7 +190,7 @@
     if (!card) { addToolCard(reply, {type:'tool_start', name:key, data:{}}); return addToolCard(reply, data); }
     card.setAttribute('data-tool-state', 'done');
     var elapsed = new Date().getTime() - Number(card.getAttribute('data-started') || new Date().getTime());
-    var state = card.querySelector('.tool-state'); if (state) state.textContent = data.data && data.data.isError ? '失败' : '完成';
+    var state = card.querySelector('.tool-state'); if (state) state.textContent = data.data && data.data.isError ? '失败' : '';
     var spinner = card.querySelector('.tool-spinner'); if (spinner) spinner.textContent = data.data && data.data.isError ? '⚠' : '✓';
     var time = card.querySelector('.tool-time'); if (time) time.textContent = elapsed + 'ms';
     var output = card.querySelector('.tool-output'); if (output) output.textContent = toolText(data.data);
