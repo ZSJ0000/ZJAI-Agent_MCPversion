@@ -208,7 +208,13 @@
       if (!payload.length) return;
       var raw = payload.join('\n');
       if (raw === '[DONE]') return;
-      var data = JSON.parse(raw);
+      var data;
+      try { data = JSON.parse(raw); } catch (parseError) {
+        var parseBox = document.createElement('div'); parseBox.className = 'agent-error';
+        parseBox.textContent = '✕ 流式数据格式错误，已跳过异常片段';
+        if (reply.parentNode) reply.parentNode.appendChild(parseBox);
+        return;
+      }
       if (data.type === 'tool_start' || data.type === 'tool_result') {
         if (reply.classList.contains('reply-loading')) {
           reply.classList.remove('reply-loading');
@@ -234,7 +240,16 @@
         sid = data.session_id || sid;
         loadSessions();
       } else if (data.type === 'error') {
-        throw new Error(data.error || '流式响应失败');
+        if (reply.classList.contains('reply-loading')) {
+          reply.classList.remove('reply-loading');
+          setRendered(reply, '');
+        }
+        var errorBox = document.createElement('div');
+        errorBox.className = 'agent-error';
+        errorBox.textContent = '✕ ' + (data.error || '流式响应失败');
+        var parent = reply.parentNode;
+        if (parent) parent.appendChild(errorBox);
+        box.scrollTop = box.scrollHeight;
       }
     }
     function read() {
