@@ -5,7 +5,7 @@ from .services.json_store import ensure_dirs, save_config, config, data, save_da
 from .services.auth_service import initialized, authenticate, create_user, users, public_user, set_enabled
 from .services.model_service import models, run, stream_reply
 from .services.skill_service import load_skills
-from .services.mcp_service import list_tools, diagnostics, test_connection, availability_warning
+from .services.mcp_service import list_tools, diagnostics, test_connection, availability_warning, user_connection_warning
 from .services.session_service import create, owned, list_owned, get_messages, add_message, delete
 
 def _admin_required(session):
@@ -107,7 +107,7 @@ def create_app():
         try:
             return jsonify(tools=[{k:t.get(k) for k in ('name','description','inputSchema')} for t in list_tools()])
         except Exception as exc:
-            return jsonify(tools=[], warning='MCP 暂不可用: '+str(exc)), 200
+            return jsonify(tools=[], warning='当前无法连接MCP服务器，错误代码：%s。如果不需要MCP，请暂时禁用该服务器。' % str(exc)), 200
     @app.post('/AdminX/api/mcp/test')
     def api_mcp_test():
         if not admin(): return jsonify(error='无权限'),403
@@ -149,10 +149,13 @@ def create_app():
         if not current: return jsonify(error='会话不存在'), 404
         if not text: return jsonify(error='消息不能为空'), 400
         add_message(current['id'], 'user', text)
+        mcp_warning=''
         try:
             tool_mode=bool(list_tools())
-        except Exception:
+            if not tool_mode: mcp_warning=user_connection_warning()
+        except Exception as exc:
             tool_mode=False
+            mcp_warning='当前无法连接MCP服务器，错误代码：%s。如果不需要MCP，请暂时禁用该服务器。' % str(exc)
         if tool_mode:
             chunks=None
         else:
@@ -162,6 +165,9 @@ def create_app():
         def generate():
             parts=[]
             try:
+                if mcp_warning:
+                    parts.append(mcp_warning + '\n\n')
+                    yield 'data: '+json.dumps({'type':'delta','content':mcp_warning+'\n\n'}, ensure_ascii=False)+'\n\n'
                 if tool_mode:
                     answer=run(x.get('model_id'), [{'role':m['role'],'content':m['content']} for m in get_messages(current['id'])])
                     text=answer.get('content','') or ''
@@ -186,7 +192,11 @@ def create_app():
         if not text:return jsonify(error='消息不能为空'),400
         add_message(s['id'],'user',text)
         try:
-            answer=run(x.get('model_id'),[{'role':m['role'],'content':m['content']} for m in get_messages(s['id'])]); add_message(s['id'],answer.get('role','assistant'),answer.get('content',''),{'tool_calls':answer.get('tool_calls',[])})
+            warning=user_connection_warning()
+            answer=run(x.get('model_id'),[{'role':m['role'],'content':m['content']} for m in get_messages(s['id'])])
+            if warning:
+                answer=dict(answer); answer['content']=(warning+'\n\n'+(answer.get('content','') or '')).strip()
+            add_message(s['id'],answer.get('role','assistant'),answer.get('content',''),{'tool_calls':answer.get('tool_calls',[])})
             return jsonify(session_id=s['id'],message=answer)
         except Exception as e:return jsonify(error=str(e),session_id=s['id']),502
     @app.get('/AdminX')
