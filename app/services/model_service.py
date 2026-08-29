@@ -56,6 +56,23 @@ def _extract_tool_calls(message):
                 except (ValueError,TypeError): continue
             if name:
                 found.append({'id':'text-call-'+str(len(found)+1),'type':'function','function':{'name':name,'arguments':json.dumps(args or {},ensure_ascii=False)}})
+    # Some local models emit a function-style call instead of tool-call tokens:
+    # mcp_filesystem_create_file({"projectId":"default", ...})
+    # Extract the balanced JSON after the function name, including nested values.
+    for match in re.finditer(r'([A-Za-z_][\w.-]*)\s*\(', content):
+        name=match.group(1)
+        if name in {c.get('function',{}).get('name') for c in found}: continue
+        begin=match.end(); depth=1; end=None
+        for pos in range(begin,len(content)):
+            if content[pos]=='(': depth+=1
+            elif content[pos]==')':
+                depth-=1
+                if depth==0: end=pos; break
+        if end is None: continue
+        for item in _json_objects(content[begin:end]):
+            if isinstance(item,dict):
+                found.append({'id':'text-call-'+str(len(found)+1),'type':'function','function':{'name':name,'arguments':json.dumps(item,ensure_ascii=False)}})
+                break
     return found
 
 def _clean_tool_markup(value):
