@@ -3,7 +3,7 @@ from flask import Flask, redirect, session, request, jsonify, render_template, R
 from .config import SECRET_KEY
 from .services.json_store import ensure_dirs, save_config, config, data, save_data
 from .services.auth_service import initialized, authenticate, create_user, users, public_user, set_enabled
-from .services.model_service import models, run, stream_reply
+from .services.model_service import models, run, stream_reply, agent_stream
 from .services.skill_service import load_skills
 from .services.mcp_service import list_tools, diagnostics, test_connection, availability_warning, user_connection_warning
 from .services.session_service import create, owned, list_owned, get_messages, add_message, delete
@@ -178,32 +178,29 @@ def create_app():
                 chunks=stream_reply(x.get('model_id'), history)
             except Exception as exc: return jsonify(error=str(exc), session_id=current['id']), 502
         def generate():
-            parts=[]
-            tool_events=[]
+            parts=[]; tool_events=[]
             try:
                 if mcp_warning:
                     parts.append(mcp_warning + '\n\n')
                     yield 'data: '+json.dumps({'type':'delta','content':mcp_warning+'\n\n'}, ensure_ascii=False)+'\n\n'
                 if tool_mode:
-                    def on_tool(kind,name,value): tool_events.append((kind,name,value))
-                    answer=run(x.get('model_id'), history, on_tool=on_tool)
-                    for kind,name,value in tool_events:
-                        event_text=_tool_event_text(kind,name,value)
-                        yield 'data: '+json.dumps({'type':'tool_'+kind,'name':name,'data':value,'content':event_text}, ensure_ascii=False)+'\n\n'
-                    text=answer.get('content','') or ''
-                    # Tool execution status belongs to the Agent UI, not the assistant reply.
-                    if tool_events and text.strip() in ('操作成功', '操作完成', '执行成功', '已完成操作'):
-                        text = ''
-                    if text:
-                        parts.append(text)
-                        yield 'data: '+json.dumps({'type':'delta','content':text}, ensure_ascii=False)+'\n\n'
+                    for event in agent_stream(x.get('model_id'), history):
+                        if event['type'] == 'plan':
+                            yield 'data: '+json.dumps({'type':'tool_start','name':'Plan','data':{'content':event['content']}}, ensure_ascii=False)+'\n\n'
+                            yield 'data: '+json.dumps({'type':'tool_result','name':'Plan','data':{'content':event['content'],'isError':False}}, ensure_ascii=False)+'\n\n'
+                        elif event['type'] in ('tool_start','tool_result'):
+                            tool_events.append(event)
+                            yield 'data: '+json.dumps(event, ensure_ascii=False)+'\n\n'
+                        elif event['type'] == 'final' and event.get('content'):
+                            parts.append(event['content'])
+                            yield 'data: '+json.dumps({'type':'delta','content':event['content']}, ensure_ascii=False)+'\n\n'
                 else:
                     for chunk in chunks:
                         parts.append(chunk)
                         yield 'data: '+json.dumps({'type':'delta','content':chunk}, ensure_ascii=False)+'\n\n'
-                meta = {'tool_events': [{'type': 'tool_'+kind, 'name': name, 'data': value} for kind, name, value in tool_events]} if tool_mode else {}
-                add_message(current['id'], 'assistant', ''.join(parts), meta)
-                yield 'data: '+json.dumps({'type':'done','session_id':current['id'],'tool_events':meta.get('tool_events',[])}, ensure_ascii=False)+'\n\n'
+                meta={'tool_events':tool_events} if tool_mode else {}
+                add_message(current['id'],'assistant',''.join(parts),meta)
+                yield 'data: '+json.dumps({'type':'done','session_id':current['id']}, ensure_ascii=False)+'\n\n'
             except Exception as exc:
                 yield 'data: '+json.dumps({'type':'error','error':str(exc)}, ensure_ascii=False)+'\n\n'
         return Response(stream_with_context(generate()), mimetype='text/event-stream', headers={'Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no','Connection':'keep-alive'})
