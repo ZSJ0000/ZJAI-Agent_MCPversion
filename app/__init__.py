@@ -5,7 +5,7 @@ from .services.json_store import ensure_dirs, save_config, config, data, save_da
 from .services.auth_service import initialized, authenticate, create_user, users, public_user, set_enabled
 from .services.model_service import models, run, stream_reply, agent_stream
 from .services.skill_service import load_skills
-from .services.mcp_service import list_tools, diagnostics, test_connection, availability_warning, user_connection_warning
+from .services.mcp_service import list_tools, diagnostics, test_connection, availability_warning, user_connection_warning, invalidate_all_cache
 from .services.session_service import create, owned, list_owned, get_messages, add_message, delete
 
 def _admin_required(session):
@@ -286,7 +286,9 @@ def create_app():
             if protocol not in ('streamable_http','sse'):return jsonify(error='MCP 协议无效'),400
             incoming_headers=item.get('headers') if isinstance(item.get('headers'),dict) else {}; incoming_token=incoming_headers.get('Authorization',''); old_item=next((old for old in config('mcp.json',{'servers':[]}).get('servers',[]) if old.get('id')==item.get('id')), {}); old_headers=old_item.get('headers',{}) or {}; old_token=old_headers.get('Authorization',''); headers={'Authorization':_keep_or_replace(incoming_token,old_token)} if (incoming_token or old_token) else {}; oauth_enabled=bool(item.get('oauth_enabled', bool(headers.get('Authorization'))))
             clean.append({'id':str(item.get('id') or 'mcp-'+str(i+1)),'name':str(item.get('name') or 'MCP '+str(i+1)),'protocol':protocol,'url':str(item['url']).strip(),'enabled':bool(item.get('enabled',True)),'oauth_enabled':oauth_enabled,'verify_ssl':bool(item.get('verify_ssl',True)),'headers':headers})
-        save_config('mcp.json',{'servers':clean});return jsonify(success=True,mcp=_safe_mcp())
+        save_config('mcp.json',{'servers':clean})
+        invalidate_all_cache()
+        return jsonify(success=True,mcp=_safe_mcp())
 
     @app.put('/AdminX/api/app-settings')
     def admin_app_save():
