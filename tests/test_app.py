@@ -574,3 +574,35 @@ def test_message_page_renders_content(isolated_data):
     c = _fresh_app(str(isolated_data)).test_client()
     html = c.get('/setup').data.decode('utf-8')
     assert '系统已初始化' in html or '已初始化' in html
+
+
+def test_mcp_endpoints_require_login(isolated_data):
+    """MCP 工具清单与诊断会暴露服务拓扑，未登录必须拒绝。"""
+    c = _setup_admin(isolated_data)
+    c.post('/logout')
+    assert c.get('/api/mcp/tools').status_code == 401
+    assert c.get('/api/mcp/diagnostics').status_code == 401
+
+
+def test_oversized_attachment_is_rejected(isolated_data):
+    """后端必须独立校验附件大小，不能只靠前端。"""
+    c = _setup_admin(isolated_data)
+    import app as app_module
+    huge = 'data:image/png;base64,' + 'A' * (app_module.MAX_ATTACHMENT_CHARS + 10)
+    r = c.post('/api/chat/stream', json={'message': 'hi', 'attachments': [{'data': huge}]})
+    assert r.status_code == 413
+
+
+def test_too_many_attachments_rejected(isolated_data):
+    c = _setup_admin(isolated_data)
+    import app as app_module
+    many = [{'name': 'a.txt', 'type': 'text/plain', 'size': 1, 'data': ''}] * (app_module.MAX_ATTACHMENTS + 1)
+    r = c.post('/api/chat/stream', json={'message': 'hi', 'attachments': many})
+    assert r.status_code == 400
+
+
+def test_request_body_limit_is_configured(isolated_data):
+    """必须有请求体上限，否则客户端可绕过前端直接推超大 payload。"""
+    app = _fresh_app(str(isolated_data))
+    assert app.config.get('MAX_CONTENT_LENGTH')
+    assert app.config['MAX_CONTENT_LENGTH'] <= 64 * 1024 * 1024

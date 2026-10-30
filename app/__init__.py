@@ -16,6 +16,10 @@ def _admin_required(session):
 KNOWN_SKINS = ('terminal', 'aurora')
 DEFAULT_SKIN = 'terminal'
 
+# 附件限制（与前端 static/chat_stream.js 的 10MB 保持一致，后端独立校验）
+MAX_ATTACHMENT_CHARS = 16 * 1024 * 1024   # base64 后字符数上限，约 10MB 原始文件
+MAX_ATTACHMENTS = 8
+
 def _mask_secret(value):
     value=str(value or '')
     if not value: return ''
@@ -47,6 +51,9 @@ def _safe_mcp():
 
 def create_app():
     app=Flask(__name__,template_folder='../templates',static_folder='../static'); app.secret_key=SECRET_KEY; ensure_dirs()
+    # 请求体上限：默认 32MB（10MB 附件经 base64 膨胀后约 13.3MB，留出余量给多附件）。
+    # 未设此值时客户端可绕过前端校验直接 POST 超大 payload 打爆内存。
+    app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('ZJAI_MAX_BODY_MB', '32')) * 1024 * 1024
     @app.before_request
     def gate():
         if not initialized() and not (request.path == '/login' or request.path == '/setup' or request.path.startswith('/setup/')) and not request.path.startswith('/static'): return redirect('/setup')
@@ -124,6 +131,8 @@ def create_app():
     def api_skills(): return jsonify(skills=load_skills())
     @app.get('/api/mcp/tools')
     def api_tools():
+        # 工具清单与诊断信息会暴露 MCP 拓扑，必须登录后才能访问。
+        if not uid(): return jsonify(error='未登录'), 401
         try:
             return jsonify(tools=[{k:t.get(k) for k in ('name','description','inputSchema')} for t in list_tools()])
         except Exception as exc:
@@ -136,6 +145,7 @@ def create_app():
         return jsonify(result), (200 if result.get('ok') else 502)
     @app.get('/api/mcp/diagnostics')
     def api_mcp_diagnostics():
+        if not uid(): return jsonify(error='未登录'), 401
         try:
             return jsonify(diagnostics())
         except Exception as exc:
@@ -178,11 +188,19 @@ def create_app():
         mcp_warning=''
         history=[{'role':m['role'],'content':m['content']} for m in get_messages(current['id'])]
         if attachments:
+            # 前端限 10MB，但后端必须独立校验：可直接 POST 绕过前端。
+            if not isinstance(attachments, list) or len(attachments) > MAX_ATTACHMENTS:
+                return jsonify(error='附件数量超出上限（最多 %d 个）' % MAX_ATTACHMENTS), 400
             parts=[{'type':'text','text':text}]
             for a in attachments:
-                if isinstance(a,dict) and a.get('data','').startswith('data:image/'):
-                    parts.append({'type':'image_url','image_url':{'url':a.get('data')}})
-                elif isinstance(a,dict):
+                if not isinstance(a, dict): continue
+                data = a.get('data') or ''
+                if not isinstance(data, str): continue
+                if len(data) > MAX_ATTACHMENT_CHARS:
+                    return jsonify(error='附件过大（单个附件上限 10MB）'), 413
+                if data.startswith('data:image/'):
+                    parts.append({'type':'image_url','image_url':{'url':data}})
+                else:
                     parts.append({'type':'text','text':'附件：%s，类型：%s，大小：%s 字节' % (a.get('name','未知'),a.get('type','未知'),a.get('size',0))})
             history[-1]['content']=parts
         try:
