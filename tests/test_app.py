@@ -753,3 +753,16 @@ def test_skills_are_sorted_and_tolerate_broken_files(isolated_data, monkeypatch,
 
     names = [s['name'] for s in sk.load_skills()]
     assert names == ['a', 'b', 'c']  # 坏文件被跳过，其余按名排序
+
+
+def test_markdown_placeholder_cannot_be_injected():
+    """renderMarkdown 的 NUL 占位符不得被用户文本伪造。"""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'chat_stream.js')
+    js = open(path, encoding='utf-8').read()
+
+    import re
+    m = re.search(r'function renderMarkdown\(value\) \{(.*?)\n  \}', js, re.S)
+    assert m, '未找到 renderMarkdown'
+    body = m.group(1)
+    # 必须在拼接前剥掉用户文本里的 NUL
+    assert "replace(/\\x00/g, '')" in body

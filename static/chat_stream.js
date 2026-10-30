@@ -30,7 +30,9 @@
   }
 
   function renderMarkdown(value) {
-    var source = escapeHtml(value);
+    // 占位符用 \x00CODE<n>\x00，先把它从用户文本里剥掉，
+    // 否则用户输入同样的序列会被误替换成块内容（NUL 字节成本很低）。
+    var source = escapeHtml(value).replace(/\x00/g, '');
     var blocks = [];
     source = source.replace(/```([\w.+-]*)\n?([\s\S]*?)```/g, function (_, lang, code) {
       var label = lang ? '<span class=\"code-lang\">' + lang + '</span>' : '';
