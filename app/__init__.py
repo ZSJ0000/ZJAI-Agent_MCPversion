@@ -11,6 +11,11 @@ from .services.session_service import create, owned, list_owned, get_messages, a
 def _admin_required(session):
     return session.get('user',{}).get('role') == 'admin'
 
+# 可选皮肤。terminal 为原有页面，保留不动；aurora 为重写后的新页面。
+# 新增皮肤：在 static/ 放对应 css，再在 templates/skins/ 放同名模板即可。
+KNOWN_SKINS = ('terminal', 'aurora')
+DEFAULT_SKIN = 'terminal'
+
 def _mask_secret(value):
     value=str(value or '')
     if not value: return ''
@@ -73,7 +78,8 @@ def create_app():
                     headers={}
                     if values.get('mcp_token'): headers['Authorization']='Bearer '+values['mcp_token']
                     save_config('mcp.json',{'servers':[{'id':'default','name':'默认 MCP','protocol':values['mcp_protocol'],'url':values['mcp_url'],'enabled':bool(values['mcp_url']),'verify_ssl':True,'headers':headers}]})
-                    save_config('app.json',{'name':values['site_name'],'theme':values['theme'],'welcome_message':values['welcome_message'],'initialized':True}); from .services.json_store import write; from .config import DATA_DIR; write(os.path.join(DATA_DIR,'install.lock'),{'initialized':True}); session.pop('setup_values',None); return redirect('/login')
+                    skin=values['theme'] if values['theme'] in KNOWN_SKINS else DEFAULT_SKIN
+                    save_config('app.json',{'name':values['site_name'],'skin':skin,'theme':skin,'welcome_message':values['welcome_message'],'initialized':True}); from .services.json_store import write; from .config import DATA_DIR; write(os.path.join(DATA_DIR,'install.lock'),{'initialized':True}); session.pop('setup_values',None); return redirect('/login')
                 except Exception as e: error=str(e)
             if error: return render_template('setup_step.html',step=step,values=values,error=error)
             return redirect('/setup/'+str(step+1)) if step<4 else redirect('/login')
@@ -87,6 +93,20 @@ def create_app():
         return render_template('login.html')
     @app.post('/logout')
     def logout(): session.clear(); return redirect('/login')
+
+    # 把当前皮肤与站点信息注入所有模板，base.html 据此选择样式表。
+    # 皮肤仅决定外观，不影响任何 DOM 结构或接口行为。
+    @app.context_processor
+    def inject_ui_context():
+        app_cfg = config('app.json', {}) or {}
+        skin = str(app_cfg.get('skin') or app_cfg.get('theme') or 'terminal')
+        if skin not in KNOWN_SKINS:
+            skin = 'terminal'
+        return {
+            'skin': skin,
+            'site_name': app_cfg.get('name') or 'ZJAI-Agent_MCPversion',
+            'welcome_message': app_cfg.get('welcome_message') or '',
+        }
     @app.get('/settings')
     def settings_page(): return render_template('settings.html',user=session['user']) if uid() else redirect('/login')
     @app.get('/settings/<section>')
@@ -293,7 +313,17 @@ def create_app():
     @app.put('/AdminX/api/app-settings')
     def admin_app_save():
         if not admin():return jsonify(error='无权限'),403
-        x=request.get_json(silent=True) or {}; value={'name':str(x.get('name') or 'ZJAI-Agent_MCPversion'),'theme':str(x.get('theme') or 'terminal'),'welcome_message':str(x.get('welcome_message') or '欢迎使用。'),'initialized':True}
+        x=request.get_json(silent=True) or {}
+        # skin 与 theme 互为别名：新前端传 skin，老前端传 theme。
+        # 都没传时保留原有值，不要静默重置回 terminal。
+        current=config('app.json',{}) or {}
+        raw_skin=x.get('skin') or x.get('theme') or current.get('skin') or current.get('theme') or DEFAULT_SKIN
+        if raw_skin not in KNOWN_SKINS:return jsonify(error='未知的界面皮肤'),400
+        value={'name':str(x.get('name') or current.get('name') or 'ZJAI-Agent_MCPversion'),
+               'skin':raw_skin,
+               'theme':raw_skin,
+               'welcome_message':str(x.get('welcome_message') if x.get('welcome_message') is not None else (current.get('welcome_message') or '欢迎使用。')),
+               'initialized':True}
         save_config('app.json',value);return jsonify(success=True,app=value)
 
     return app

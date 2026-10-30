@@ -1,1 +1,5 @@
-{% extends "base.html" %}<h1>{{title}}</h1><p>{{message}}</p><a href="/login">[ 登录 ]</a>
+{% extends "base.html" %}{% block content %}
+<h1 class="cyan">{{ title }}</h1>
+<p>{{ message }}</p>
+<div class="actions"><a class="nav-button primary" href="/login">[ 登录 ]</a></div>
+{% endblock %}

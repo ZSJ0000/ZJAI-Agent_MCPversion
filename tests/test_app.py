@@ -491,3 +491,86 @@ def test_stylesheet_is_well_formed(isolated_data):
     assert ':focus-visible' in css
     # 基础可访问性：必须声明视口与减少动效偏好
     assert 'prefers-reduced-motion' in css
+
+
+def _set_skin(c, skin):
+    r = c.put('/AdminX/api/app-settings', json={'name': 'ZJAI', 'skin': skin})
+    assert r.status_code == 200, r.get_json()
+    return r.get_json()['app']
+
+
+CHAT_CONTRACT_IDS = [
+    'conversation-panel', 'empty-state', 'file-input', 'form', 'input', 'logout',
+    'messages', 'mobile-menu', 'model', 'new', 'refresh', 'send-button', 'sessions', 'status',
+]
+
+
+def test_chat_dom_contract_is_intact(isolated_data):
+    """chat_stream.js 依赖这些 ID，缺失会导致聊天功能静默失效。"""
+    c = _setup_admin(isolated_data)
+    html = c.get('/chat').data.decode('utf-8')
+    missing = [i for i in CHAT_CONTRACT_IDS if 'id="%s"' % i not in html]
+    assert not missing, '缺少 chat_stream.js 依赖的 ID: %s' % missing
+
+
+def test_skin_switch_loads_aurora_css(isolated_data):
+    """切到 aurora 后应引入新样式表并打上 skin 类，切回 terminal 则都不出现。"""
+    c = _setup_admin(isolated_data)
+
+    _set_skin(c, 'aurora')
+    html = c.get('/chat').data.decode('utf-8')
+    assert 'aurora.css' in html
+    assert 'skin-aurora' in html
+    # 基线样式表仍加载，aurora 只做覆盖
+    assert 'terminal.css' in html
+    assert all('id="%s"' % i in html for i in CHAT_CONTRACT_IDS)
+
+    _set_skin(c, 'terminal')
+    html = c.get('/chat').data.decode('utf-8')
+    assert 'aurora.css' not in html
+    assert 'skin-terminal' in html
+
+
+def test_skin_applies_to_all_pages(isolated_data):
+    """皮肤应作用于所有页面，而不是只有聊天页。"""
+    c = _setup_admin(isolated_data)
+    _set_skin(c, 'aurora')
+    for url in ('/chat', '/settings', '/settings/models', '/AdminX'):
+        html = c.get(url).data.decode('utf-8')
+        assert 'skin-aurora' in html, url
+
+
+def test_unknown_skin_is_rejected(isolated_data):
+    c = _setup_admin(isolated_data)
+    r = c.put('/AdminX/api/app-settings', json={'skin': 'nope'})
+    assert r.status_code == 400
+    assert c.get('/chat').data.decode('utf-8').count('skin-aurora') == 0
+
+
+def test_theme_is_alias_for_skin(isolated_data):
+    """老客户端传 theme 也要能生效，且保存后两者一致。"""
+    c = _setup_admin(isolated_data)
+    r = c.put('/AdminX/api/app-settings', json={'theme': 'aurora'})
+    assert r.status_code == 200
+    app_cfg = r.get_json()['app']
+    assert app_cfg['skin'] == 'aurora'
+    assert app_cfg['theme'] == 'aurora'
+
+
+def test_saving_settings_does_not_reset_skin(isolated_data):
+    """只改欢迎语时不得把皮肤悄悄重置回默认值。"""
+    c = _setup_admin(isolated_data)
+    _set_skin(c, 'aurora')
+    r = c.put('/AdminX/api/app-settings', json={'welcome_message': '你好'})
+    assert r.status_code == 200
+    assert r.get_json()['app']['skin'] == 'aurora'
+
+
+def test_message_page_renders_content(isolated_data):
+    """message.html 曾缺少 content block，导致页面空白。"""
+    import app.services.json_store as store
+    from app.config import DATA_DIR
+    store.write(os.path.join(DATA_DIR, 'install.lock'), {'initialized': True})
+    c = _fresh_app(str(isolated_data)).test_client()
+    html = c.get('/setup').data.decode('utf-8')
+    assert '系统已初始化' in html or '已初始化' in html

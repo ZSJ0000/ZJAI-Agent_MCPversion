@@ -1,0 +1,503 @@
+/* ==========================================================================
+   Aurora 皮肤
+   仅在 app.json 的 skin/theme 设为 "aurora" 时由 base.html 引入。
+   完全基于类名覆盖，不依赖任何模板结构变化，因此 chat_stream.js 无需改动。
+   原 terminal.css 仍作为基线加载，这里只做视觉层覆盖。
+   ========================================================================== */
+
+.skin-aurora {
+  --au-bg: #0e1117;
+  --au-bg-panel: #151a23;
+  --au-bg-raised: #1b2230;
+  --au-bg-hover: #222c3d;
+  --au-border: #2a3444;
+  --au-border-soft: #1f2836;
+  --au-accent: #7c9cff;
+  --au-accent-strong: #a78bfa;
+  --au-accent-soft: rgba(124, 156, 255, 0.14);
+  --au-text: #e6ebf3;
+  --au-text-dim: #9aa7b8;
+  --au-text-mute: #6b7788;
+  --au-danger: #f87171;
+  --au-ok: #4ade80;
+  --au-radius: 12px;
+  --au-radius-lg: 16px;
+  --au-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  --au-font: "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --au-mono: "JetBrains Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+}
+
+/* ---------- 基础 ---------- */
+body.skin-aurora {
+  background: var(--au-bg);
+  color: var(--au-text);
+  font-family: var(--au-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 通用页面（设置、后台、登录、安装向导）在 aurora 下的容器 */
+.skin-aurora .terminal {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.skin-aurora h1,
+.skin-aurora h2,
+.skin-aurora h3 {
+  color: var(--au-text);
+  font-weight: 600;
+  border-bottom: 1px solid var(--au-border-soft);
+  padding-bottom: 12px;
+  letter-spacing: 0;
+}
+
+.skin-aurora h1 { font-size: 24px; }
+.skin-aurora h2 { font-size: 19px; margin-top: 32px; }
+.skin-aurora h3 { font-size: 16px; border-bottom: 0; padding-bottom: 6px; margin-bottom: 8px; }
+
+.skin-aurora .cyan { color: var(--au-accent); }
+.skin-aurora .gray { color: var(--au-text-dim); }
+.skin-aurora label { color: var(--au-text-dim); font-size: 13px; }
+
+/* ---------- 表单控件 ---------- */
+.skin-aurora input,
+.skin-aurora textarea,
+.skin-aurora select {
+  background: var(--au-bg-raised);
+  border: 1px solid var(--au-border);
+  border-radius: 8px;
+  color: var(--au-text);
+  font-family: var(--au-font);
+  font-size: 14px;
+  padding: 11px 13px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.skin-aurora input::placeholder,
+.skin-aurora textarea::placeholder { color: var(--au-text-mute); }
+
+.skin-aurora input:focus,
+.skin-aurora textarea:focus,
+.skin-aurora select:focus {
+  border-color: var(--au-accent);
+  box-shadow: 0 0 0 3px var(--au-accent-soft);
+  outline: none;
+}
+
+/* ---------- 按钮 ---------- */
+.skin-aurora .nav-button,
+.skin-aurora .button,
+.skin-aurora .round-button,
+.skin-aurora .send-button,
+.skin-aurora .toggle-enabled,
+.skin-aurora .confirm {
+  border: 1px solid var(--au-border);
+  border-radius: 9px;
+  background: var(--au-bg-raised);
+  color: var(--au-text);
+  font-family: var(--au-font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, transform .08s ease;
+}
+
+.skin-aurora .nav-button:hover,
+.skin-aurora .button:hover,
+.skin-aurora .round-button:hover,
+.skin-aurora .toggle-enabled:hover {
+  background: var(--au-bg-hover);
+  border-color: var(--au-accent);
+}
+
+.skin-aurora .nav-button:active,
+.skin-aurora .button:active { transform: translateY(1px); }
+
+.skin-aurora .nav-button.primary,
+.skin-aurora .button.primary,
+.skin-aurora .send-button {
+  background: var(--au-accent);
+  border-color: var(--au-accent);
+  color: #0b0e14;
+  font-weight: 600;
+}
+
+.skin-aurora .nav-button.primary:hover,
+.skin-aurora .send-button:hover {
+  background: var(--au-accent-strong);
+  border-color: var(--au-accent-strong);
+  color: #0b0e14;
+}
+
+.skin-aurora .setting-row .remove {
+  color: var(--au-danger);
+  border-color: transparent;
+  background: transparent;
+}
+
+.skin-aurora .setting-row .remove:hover {
+  background: rgba(248, 113, 113, .12);
+  border-color: var(--au-danger);
+}
+
+/* ---------- 消息与提示 ---------- */
+.skin-aurora .error {
+  background: rgba(248, 113, 113, .1);
+  border: 1px solid var(--au-danger);
+  border-radius: 8px;
+  color: #fca5a5;
+}
+
+.skin-aurora .success {
+  background: rgba(74, 222, 128, .1);
+  border: 1px solid var(--au-ok);
+  border-radius: 8px;
+  color: #86efac;
+}
+
+.skin-aurora .panel,
+.skin-aurora .msg,
+.skin-aurora .setup-page,
+.skin-aurora .api-item {
+  background: var(--au-bg-panel);
+  border: 1px solid var(--au-border-soft);
+  border-radius: var(--au-radius);
+}
+
+/* ---------- 设置页 ---------- */
+.skin-aurora .settings-option {
+  background: var(--au-bg-panel);
+  border: 1px solid var(--au-border-soft);
+  border-radius: var(--au-radius);
+  color: var(--au-text);
+  transition: border-color .15s ease, background-color .15s ease;
+}
+
+.skin-aurora .settings-option:hover {
+  background: var(--au-bg-raised);
+  border-color: var(--au-accent);
+}
+
+.skin-aurora .settings-option b { color: var(--au-text); font-weight: 600; }
+.skin-aurora .settings-option span { color: var(--au-text-dim); }
+.skin-aurora .settings-option i { color: var(--au-accent); }
+.skin-aurora .settings-back { color: var(--au-accent); }
+
+.skin-aurora .setting-row {
+  background: var(--au-bg-panel);
+  border: 1px solid var(--au-border-soft);
+  border-radius: var(--au-radius);
+}
+
+.skin-aurora .setting-row:hover { border-color: var(--au-border); }
+.skin-aurora .setting-row label { color: var(--au-text-dim); }
+
+/* ---------- 聊天页骨架 ---------- */
+.skin-aurora .chat-layout {
+  background: var(--au-bg);
+  color: var(--au-text);
+}
+
+.skin-aurora .icon-rail {
+  background: #0a0d13;
+  border-right: 1px solid var(--au-border-soft);
+}
+
+.skin-aurora .brand-mark {
+  color: var(--au-accent);
+  font-weight: 700;
+}
+
+.skin-aurora .rail-icon {
+  border: 0;
+  border-radius: 11px;
+  color: var(--au-text-dim);
+  background: transparent;
+  font-family: var(--au-font);
+}
+
+.skin-aurora .rail-icon:hover {
+  background: var(--au-bg-hover);
+  color: var(--au-text);
+}
+
+.skin-aurora .rail-icon.active {
+  background: var(--au-accent-soft);
+  color: var(--au-accent);
+}
+
+.skin-aurora .conversation-panel {
+  background: var(--au-bg-panel);
+  border-right: 1px solid var(--au-border-soft);
+}
+
+.skin-aurora .new-chat {
+  background: var(--au-bg-raised);
+  border: 1px solid var(--au-border);
+  border-radius: 9px;
+  color: var(--au-text);
+  font-family: var(--au-font);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.skin-aurora .new-chat:hover {
+  background: var(--au-accent-soft);
+  border-color: var(--au-accent);
+  color: var(--au-text);
+}
+
+.skin-aurora .conversation-tools { color: var(--au-text-mute); font-size: 12px; }
+.skin-aurora .conversation-tools button { color: var(--au-text-mute); }
+.skin-aurora .conversation-tools button:hover { color: var(--au-accent); }
+
+.skin-aurora .session-item {
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--au-text-dim);
+  font-family: var(--au-font);
+  font-size: 13px;
+}
+
+.skin-aurora .session-item:hover { background: var(--au-bg-hover); color: var(--au-text); }
+.skin-aurora .session-item.selected { background: var(--au-accent-soft); color: var(--au-accent); }
+
+.skin-aurora .conversation-footer {
+  border-top: 1px solid var(--au-border-soft);
+  color: var(--au-text-mute);
+  font-size: 12px;
+}
+
+.skin-aurora .conversation-footer a { color: var(--au-accent); }
+
+/* ---------- 聊天头部 ---------- */
+.skin-aurora .chat-main { background: var(--au-bg); }
+
+.skin-aurora .chat-header {
+  height: 64px;
+  padding: 0 24px;
+  background: rgba(14, 17, 23, .82);
+  border-bottom: 1px solid var(--au-border-soft);
+  backdrop-filter: blur(12px);
+}
+
+.skin-aurora .model-symbol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--au-accent-soft);
+  color: var(--au-accent);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.skin-aurora .chat-header select {
+  background: transparent;
+  border: 0;
+  color: var(--au-text);
+  font-family: var(--au-font);
+  font-size: 15px;
+  font-weight: 600;
+  min-width: 150px;
+  padding: 7px 4px;
+  box-shadow: none;
+}
+
+.skin-aurora .chat-header select:focus { box-shadow: none; border-color: transparent; }
+.skin-aurora .chevron { color: var(--au-text-mute); }
+.skin-aurora .header-actions { color: var(--au-text-mute); font-size: 12px; }
+.skin-aurora .header-actions a { color: var(--au-text-dim); text-decoration: none; }
+.skin-aurora .header-actions a:hover { color: var(--au-accent); }
+
+.skin-aurora .mobile-menu {
+  background: var(--au-bg-raised);
+  border: 1px solid var(--au-border);
+  border-radius: 8px;
+  color: var(--au-text);
+}
+
+/* ---------- 消息区 ---------- */
+.skin-aurora .message-area { background: var(--au-bg); }
+
+.skin-aurora .empty-state { color: var(--au-text-dim); }
+.skin-aurora .empty-state h1 { color: var(--au-text); border: 0; font-size: 26px; font-weight: 600; }
+
+.skin-aurora .empty-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--au-accent-soft);
+  color: var(--au-accent);
+  font-size: 34px;
+  font-weight: 700;
+}
+
+.skin-aurora .message { max-width: 820px; }
+.skin-aurora .message-role { color: var(--au-text-mute); font-size: 12px; }
+
+.skin-aurora .message-content {
+  background: var(--au-bg-panel);
+  border: 1px solid var(--au-border-soft);
+  border-radius: var(--au-radius);
+  color: var(--au-text);
+  font-family: var(--au-font);
+  font-size: 15px;
+  line-height: 1.75;
+  padding: 14px 16px;
+}
+
+.skin-aurora .user-message .message-content {
+  background: var(--au-accent-soft);
+  border-color: rgba(124, 156, 255, .3);
+  color: var(--au-text);
+}
+
+.skin-aurora .assistant-message .message-role {
+  border: 1px solid var(--au-border);
+  border-radius: 10px;
+  background: var(--au-bg-raised);
+  color: var(--au-accent);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* ---------- 工具调用卡片 ---------- */
+.skin-aurora .tool-card {
+  border: 1px solid var(--au-border-soft);
+  border-radius: var(--au-radius);
+  background: var(--au-bg-panel);
+  overflow: hidden;
+}
+
+.skin-aurora .tool-head {
+  background: var(--au-bg-raised);
+  border-bottom: 1px solid var(--au-border-soft);
+  color: var(--au-text-dim);
+  font-family: var(--au-mono);
+  font-size: 12px;
+  padding: 9px 12px;
+}
+
+.skin-aurora .tool-head:hover { background: var(--au-bg-hover); color: var(--au-text); }
+.skin-aurora .tool-detail { color: var(--au-text-dim); font-family: var(--au-mono); font-size: 12px; }
+.skin-aurora .tool-succeeded .tool-state { color: var(--au-ok); }
+.skin-aurora .tool-failed .tool-state { color: var(--au-danger); }
+.skin-aurora .agent-progress { color: var(--au-text-dim); font-size: 12px; }
+
+.skin-aurora .agent-error {
+  border: 1px solid var(--au-danger);
+  border-radius: var(--au-radius);
+  background: rgba(248, 113, 113, .08);
+  color: #fca5a5;
+}
+
+/* ---------- 会话更多菜单 ---------- */
+.skin-aurora .session-more {
+  background: transparent !important;
+  border: 0 !important;
+  color: var(--au-text-mute) !important;
+  font-family: var(--au-font) !important;
+}
+
+.skin-aurora .session-more:hover { background: var(--au-bg-hover) !important; color: var(--au-text) !important; }
+
+.skin-aurora .session-menu {
+  background: var(--au-bg-raised);
+  border: 1px solid var(--au-border);
+  border-radius: 10px;
+  box-shadow: var(--au-shadow);
+  overflow: hidden;
+}
+
+.skin-aurora .session-menu button {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--au-border-soft);
+  color: var(--au-text-dim);
+  font-family: var(--au-font);
+  font-size: 13px;
+}
+
+.skin-aurora .session-menu button:last-child { border-bottom: 0; }
+.skin-aurora .session-menu button:hover { background: var(--au-bg-hover); color: var(--au-text); }
+
+/* ---------- 输入区 ---------- */
+.skin-aurora .composer-wrap { background: var(--au-bg); }
+
+.skin-aurora .composer {
+  background: var(--au-bg-panel);
+  border: 1px solid var(--au-border);
+  border-radius: var(--au-radius-lg);
+  box-shadow: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.skin-aurora .composer:focus-within {
+  border-color: var(--au-accent);
+  box-shadow: 0 0 0 3px var(--au-accent-soft);
+}
+
+.skin-aurora .composer textarea {
+  background: transparent;
+  border: 0;
+  color: var(--au-text);
+  font-family: var(--au-font);
+  font-size: 15px;
+  line-height: 1.6;
+  box-shadow: none;
+}
+
+.skin-aurora .composer textarea:focus { box-shadow: none; border-color: transparent; }
+.skin-aurora .composer textarea::placeholder { color: var(--au-text-mute); }
+
+.skin-aurora .round-button {
+  background: var(--au-bg-raised);
+  border: 1px solid var(--au-border);
+  border-radius: 9px;
+  color: var(--au-text-dim);
+  font-size: 18px;
+}
+
+.skin-aurora .round-button:hover { background: var(--au-bg-hover); color: var(--au-text); }
+.skin-aurora .composer-hint { color: var(--au-text-mute); font-size: 11px; }
+.skin-aurora .notice { color: var(--au-text-mute); font-size: 11px; }
+
+.skin-aurora .attach-menu {
+  background: var(--au-bg-raised);
+  border: 1px solid var(--au-border);
+  border-radius: 10px;
+  box-shadow: var(--au-shadow);
+  overflow: hidden;
+}
+
+.skin-aurora .attach-menu-item {
+  background: transparent;
+  border: 0;
+  color: var(--au-text-dim);
+  font-family: var(--au-font);
+  font-size: 13px;
+}
+
+.skin-aurora .attach-menu-item:hover { background: var(--au-bg-hover); color: var(--au-text); }
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 800px) {
+  .skin-aurora .chat-header { padding: 0 14px; }
+  .skin-aurora .message-area { padding: 20px 14px; }
+  .skin-aurora .composer-wrap { padding: 10px 12px 12px; }
+  .skin-aurora .header-actions { display: none; }
+}
+
+@media (max-width: 520px) {
+  .skin-aurora .chat-header { padding: 0 10px; }
+  .skin-aurora .message-area { padding: 16px 10px; }
+  .skin-aurora .user-message .message-content { max-width: 88%; }
+  .skin-aurora .setting-row { grid-template-columns: 1fr; }
+}
