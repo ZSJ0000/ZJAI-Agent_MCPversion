@@ -5,7 +5,7 @@ from .services.json_store import ensure_dirs, save_config, config, data, save_da
 from .services.auth_service import initialized, authenticate, create_user, users, public_user, set_enabled
 from .services.model_service import models, run, stream_reply, agent_stream
 from .services.skill_service import load_skills
-from .services.mcp_service import list_tools, diagnostics, test_connection, availability_warning, user_connection_warning, invalidate_all_cache
+from .services.mcp_service import list_tools, diagnostics, test_connection, user_connection_warning, invalidate_all_cache
 from .services.session_service import create, owned, list_owned, get_messages, add_message, delete
 
 def _admin_required(session):

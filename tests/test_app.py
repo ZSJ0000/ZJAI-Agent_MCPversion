@@ -1,4 +1,4 @@
-import os, sys, json, tempfile, copy, importlib
+import os, sys, tempfile, copy
 
 import pytest
 
@@ -25,9 +25,10 @@ def isolated_data(tmp_path, monkeypatch):
     # 都执行 from .config import DATA_DIR，导入后这些名字固化成值，事后 patch 不生效。
     # 注意要 patch sys.modules 里的真正模块对象：包初始化过程中 import app.config
     # 可能拿到另一个副本，改副本上的属性会被 from .config import 忽略。
-    import app as app_pkg  # noqa: F401  确保包已完成初始化
-    import app.services.json_store  # noqa: F401  确保它已完成 from .config import
-    import app.services.auth_service  # noqa: F401  同上
+    import app  # noqa: F401  确保包已完成初始化
+    import app.services.json_store
+    import app.services.auth_service
+    assert app  # 仅为触发导入，确保子模块已注册到 sys.modules
 
     cfg = sys.modules['app.config']
     cfg.DATA_DIR = data_dir
@@ -36,6 +37,12 @@ def isolated_data(tmp_path, monkeypatch):
     store = sys.modules['app.services.json_store']
     store.DATA_DIR = data_dir
     store.CONFIG_DIR = config_dir
+
+    # initialized() 在导入时就绑定了 DATA_DIR，也要改
+    auth = sys.modules['app.services.auth_service']
+    assert auth is app.services.auth_service
+    if hasattr(auth, 'DATA_DIR'):
+        auth.DATA_DIR = data_dir
 
     # 这几个模块都用 from ... import DATA_DIR 绑定了值，必须逐个覆盖。
     for mod_name in list(sys.modules):
@@ -237,7 +244,7 @@ def test_tools_cache_hits_and_returns_deep_copies(mcp, monkeypatch):
 
     monkeypatch.setattr(mcp, '_post', fake_post)
 
-    first = mcp.list_tools()
+    mcp.list_tools()
     assert len(list_calls) == 1
 
     # 缓存命中：不应再次请求 tools/list
@@ -331,6 +338,7 @@ def test_returned_tools_do_not_alias_cache(mcp, monkeypatch):
 
     first = mcp._get_server_tools(host)
     first[0]['name'] = 'MUTATED'
+    assert first[0]['name'] == 'MUTATED'
     second = mcp._get_server_tools(host)
     assert second[0]['name'] == 'create_file'
     assert first is not second
