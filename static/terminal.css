@@ -79,3 +79,87 @@
 .agent-error{flex:1 1 100%;margin-left:60px;margin-top:10px;padding:10px;border:1px solid #ff3333;color:#ff3333;background:#110000;white-space:pre-wrap;word-break:break-word}
 
 .attach-menu-wrap{position:relative;display:inline-flex;align-items:center}.attach-menu{display:none;position:absolute;z-index:30;left:0;bottom:48px;width:190px;padding:6px;border:1px solid #444;background:#1b1c1f;box-shadow:0 4px 14px #000}.attach-menu.show{display:block}.attach-menu-item{display:block;width:100%;margin:0;padding:10px 8px;border:0;background:transparent;color:#e8edf3;text-align:left;font:14px Consolas,"Courier New",monospace;cursor:pointer}.attach-menu-item:hover{background:#08090b;color:#fff}.attach-menu-item:first-child{border-radius:8px 8px 0 0}.attach-menu-item:last-child{border-radius:0 0 8px 8px}
+
+/* --- 管理后台 /AdminX --- */
+.form-inline{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}
+.form-inline input{flex:1 1 180px;min-width:0;margin:0}
+.form-inline .nav-button{flex:0 0 auto;width:auto;min-height:42px}
+.user-row{grid-template-columns:1fr 110px 90px auto}
+.user-name{color:#00ff00;font-weight:700;overflow:hidden;text-overflow:ellipsis}
+.user-role{padding:2px 8px;border:1px solid #555;color:#777;font-size:12px;text-align:center}
+.user-role.is-admin{border-color:#00ffff;color:#00ffff}
+.user-state{font-size:12px;text-align:center}
+.user-state.is-enabled{color:#00ff00}
+.user-state.is-disabled{color:#777}
+#cfg-models .setting-row,#cfg-mcp .setting-row{grid-template-columns:1fr 1.5fr 1fr 1fr auto;font-size:13px}
+#cfg-models .setting-row .key,#cfg-mcp .setting-row .key{letter-spacing:.2px}
+@media(max-width:800px){
+  .form-inline{display:block}
+  .form-inline input{margin:0 0 10px}
+  .form-inline .nav-button{width:100%}
+  .user-row,#cfg-models .setting-row,#cfg-mcp .setting-row{grid-template-columns:1fr}
+}
+
+/* ==========================================================================
+   统一覆盖层（放在最后，优先级最高）
+   目的：收敛前面多轮叠加造成的样式冲突，统一色板与间距，
+   不改变任何 DOM 结构，避免影响 chat_stream.js 的渲染逻辑。
+   ========================================================================== */
+:root{
+  --zj-bg:#0b0f14;
+  --zj-bg-raised:#0d1218;
+  --zj-bg-panel:#111820;
+  --zj-bg-hover:#17303b;
+  --zj-border:#252b34;
+  --zj-border-soft:#33404c;
+  --zj-accent:#22d3ee;
+  --zj-accent-dim:#1f8aa2;
+  --zj-text:#e8edf3;
+  --zj-text-dim:#8793a1;
+  --zj-text-mute:#687583;
+  --zj-danger:#ff5555;
+  --zj-ok:#34d399;
+  --zj-radius:10px;
+  --zj-gap:10px;
+}
+
+/* 全局焦点可见性：键盘操作时能看清焦点在哪 */
+:focus-visible{outline:2px solid var(--zj-accent);outline-offset:2px}
+
+/* 滚动条统一 */
+.message-area,.session-list{scrollbar-width:thin;scrollbar-color:var(--zj-border-soft) transparent}
+.message-area::-webkit-scrollbar,.session-list::-webkit-scrollbar{width:8px}
+.message-area::-webkit-scrollbar-thumb,.session-list::-webkit-scrollbar-thumb{border-radius:4px;background:var(--zj-border-soft)}
+.message-area::-webkit-scrollbar-track,.session-list::-webkit-scrollbar-track{background:transparent}
+
+/* 按钮统一：把散落的多套 border-radius / 高度收敛成一致观感 */
+.nav-button,.button,.new-chat,.rail-icon,.session-item,.round-button,.send-button{
+  transition:background-color .14s ease,color .14s ease,border-color .14s ease;
+}
+.nav-button,.button{min-height:44px}
+.nav-button.primary{color:var(--zj-accent);border-color:var(--zj-accent)}
+
+/* 设置页与后台的行布局：统一圆角与悬浮反馈，去掉多余的黄色文字块 */
+.setting-row{border-radius:var(--zj-radius);background:var(--zj-bg-panel)}
+.setting-row:hover{border-color:var(--zj-border-soft)}
+.setting-row label{color:var(--zj-text-dim)}
+
+/* 表单控件统一 */
+input,textarea,select{border-radius:6px}
+input:focus,textarea:focus,select:focus{border-color:var(--zj-accent);outline:none}
+input:disabled,textarea:disabled,select:disabled{color:var(--zj-text-mute);border-color:var(--zj-border)}
+
+/* 消息提示统一 */
+.error{border-radius:6px;background:#1a0b0b}
+.success{border-radius:6px;background:#0b1a12}
+
+/* 管理后台：表格式概览在窄屏下退化为卡片，避免横向滚动 */
+@media(max-width:800px){
+  .user-row,#cfg-models .setting-row,#cfg-mcp .setting-row{grid-template-columns:1fr}
+  .user-role,.user-state{text-align:left}
+}
+
+/* 尊重系统"减少动态效果"偏好 */
+@media(prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}

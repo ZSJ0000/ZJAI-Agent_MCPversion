@@ -1,1 +1,139 @@
-{% extends "base.html" %}{% block content %}<h1 class="cyan">[ROOT] 管理员控制台</h1><p>模型、MCP、Skill 管理接口已预留。</p><a href="/chat">[ 返回聊天 ]</a>{% endblock %}
+{% extends 'base.html' %}{% block content %}
+<h1 class="cyan">[ROOT] 管理员控制台</h1>
+<div class="actions">
+  <a class="nav-button" href="/chat">返回聊天</a>
+  <a class="nav-button" href="/settings">设置中心</a>
+  <button id="logout" class="nav-button">注销</button>
+</div>
+
+<section class="settings-section">
+  <h2 class="cyan">[ 用户管理 ]</h2>
+  <p class="gray">管理可登录本实例的账户。管理员账户不可停用。</p>
+  <div id="users">正在加载...</div>
+  <div class="form-inline">
+    <input id="new-username" placeholder="账号" autocomplete="off">
+    <input id="new-password" type="password" placeholder="密码（至少 6 位）" autocomplete="new-password">
+    <button id="create-user" class="nav-button primary">创建用户</button>
+  </div>
+</section>
+
+<section class="settings-section">
+  <h2 class="cyan">[ 运行配置概览 ]</h2>
+  <p class="gray">此处仅展示已生效的配置，密钥已脱敏。修改请前往设置中心。</p>
+  <h3>模型 API</h3>
+  <div id="cfg-models">正在加载...</div>
+  <h3>MCP 服务</h3>
+  <div id="cfg-mcp">正在加载...</div>
+</section>
+
+<div id="message"></div>
+
+<script>
+(function () {
+  var msg = document.getElementById('message');
+  function say(t, isErr) { msg.textContent = t || ''; msg.className = isErr ? 'error' : 'success'; }
+  function api(url, opt) {
+    return fetch(url, opt).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (x) {
+        if (!r.ok) throw new Error(x.error || ('请求失败（HTTP ' + r.status + '）'));
+        return x;
+      });
+    });
+  }
+  function el(tag, cls, text) {
+    var d = document.createElement(tag);
+    if (cls) d.className = cls;
+    if (text !== undefined && text !== null) d.textContent = String(text);
+    return d;
+  }
+
+  function renderUsers(list) {
+    var box = document.getElementById('users');
+    box.innerHTML = '';
+    if (!list.length) { box.appendChild(el('p', 'gray', '暂无用户')); return; }
+    list.forEach(function (u) {
+      var row = el('div', 'setting-row user-row');
+      row.appendChild(el('span', 'user-name', u.username));
+      row.appendChild(el('span', 'user-role ' + (u.role === 'admin' ? 'is-admin' : ''), u.role === 'admin' ? '管理员' : '普通用户'));
+      var state = el('span', 'user-state ' + (u.enabled === false ? 'is-disabled' : 'is-enabled'), u.enabled === false ? '已停用' : '已启用');
+      row.appendChild(state);
+      if (u.role !== 'admin') {
+        var btn = el('button', 'toggle-enabled ' + (u.enabled === false ? 'is-disabled' : 'is-enabled'), u.enabled === false ? '启用' : '停用');
+        btn.type = 'button';
+        btn.onclick = function () {
+          btn.disabled = true;
+          api('/AdminX/api/users/' + encodeURIComponent(u.id) + '/toggle', { method: 'POST' })
+            .then(function () { say('已更新用户 ' + u.username); loadUsers(); })
+            .catch(function (e) { say(e.message, true); btn.disabled = false; });
+        };
+        row.appendChild(btn);
+      } else {
+        row.appendChild(el('span', 'gray', '—'));
+      }
+      box.appendChild(row);
+    });
+  }
+
+  function loadUsers() {
+    api('/AdminX/api/users').then(function (x) { renderUsers(x.users || []); })
+      .catch(function (e) { say(e.message, true); document.getElementById('users').textContent = '加载失败'; });
+  }
+
+  function renderModels(list) {
+    var box = document.getElementById('cfg-models');
+    box.innerHTML = '';
+    if (!list.length) { box.appendChild(el('p', 'gray', '未配置模型 API')); return; }
+    list.forEach(function (m) {
+      var row = el('div', 'setting-row');
+      row.appendChild(el('span', 'name', m.name || m.id));
+      row.appendChild(el('span', 'url', m.base_url || ''));
+      row.appendChild(el('span', 'gray', m.model || ''));
+      row.appendChild(el('span', 'key', m.api_key || '(未设置)'));
+      if (m.default) row.appendChild(el('span', 'is-enabled', '默认'));
+      box.appendChild(row);
+    });
+  }
+
+  function renderMcp(list) {
+    var box = document.getElementById('cfg-mcp');
+    box.innerHTML = '';
+    if (!list.length) { box.appendChild(el('p', 'gray', '未配置 MCP 服务')); return; }
+    list.forEach(function (s) {
+      var row = el('div', 'setting-row');
+      row.appendChild(el('span', 'name', s.name || s.id));
+      row.appendChild(el('span', 'url', s.url || ''));
+      row.appendChild(el('span', 'gray', s.protocol || 'streamable_http'));
+      var hasHeaders = s.headers && typeof s.headers === 'object' && Object.keys(s.headers).length;
+      row.appendChild(el('span', 'key', hasHeaders ? '已配置鉴权' : '无鉴权'));
+      row.appendChild(el('span', s.enabled === false ? 'user-state is-disabled' : 'user-state is-enabled', s.enabled === false ? '已停用' : '已启用'));
+      box.appendChild(row);
+    });
+  }
+
+  document.getElementById('create-user').onclick = function () {
+    var nameEl = document.getElementById('new-username'), passEl = document.getElementById('new-password');
+    var username = nameEl.value.trim(), password = passEl.value;
+    if (!username) { say('请填写账号', true); return; }
+    if (password.length < 6) { say('密码至少 6 位', true); return; }
+    var btn = this; btn.disabled = true;
+    api('/AdminX/api/users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username, password: password })
+    }).then(function () {
+      say('已创建用户 ' + username);
+      nameEl.value = ''; passEl.value = '';
+      loadUsers();
+    }).catch(function (e) { say(e.message, true); }).then(function () { btn.disabled = false; });
+  };
+
+  document.getElementById('logout').onclick = function () {
+    fetch('/logout', { method: 'POST', redirect: 'manual' }).then(function () { location = '/login'; });
+  };
+
+  loadUsers();
+  api('/AdminX/api/config').then(function (x) {
+    renderModels(x.models || []); renderMcp(x.mcp || []);
+  }).catch(function (e) { say(e.message, true); });
+})();
+</script>
+{% endblock %}

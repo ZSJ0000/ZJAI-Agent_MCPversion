@@ -334,3 +334,160 @@ def test_returned_tools_do_not_alias_cache(mcp, monkeypatch):
     second = mcp._get_server_tools(host)
     assert second[0]['name'] == 'create_file'
     assert first is not second
+
+
+def _setup_admin(iso):
+    """跑完 4 步安装向导并以管理员登录，返回已登录的 test_client。"""
+    app = _fresh_app(str(iso))
+    c = app.test_client()
+    c.get('/setup')
+    c.post('/setup/2', data={'username': 'admin', 'password': 'password', 'confirm': 'password'})
+    c.post('/setup/3', data={
+        'api_name[]': ['local'],
+        'api_base_url[]': ['http://127.0.0.1:11434/v1'],
+        'api_key[]': ['sk-test'],
+        'api_model[]': ['llama3'],
+    })
+    c.post('/setup/4', data={'site_name': 'ZJAI'})
+    assert c.post('/login', data={'username': 'admin', 'password': 'password'}).status_code == 302
+    return c
+
+
+def test_admin_page_renders_real_console(isolated_data):
+    """管理后台必须是可用的控制台，不是占位文案。"""
+    c = _setup_admin(isolated_data)
+    r = c.get('/AdminX')
+    assert r.status_code == 200
+    html = r.data.decode('utf-8')
+    assert '用户管理' in html
+    assert '运行配置概览' in html
+    # 占位时期的文案不应再出现
+    assert '接口已预留' not in html
+
+
+def test_admin_user_lifecycle(isolated_data):
+    """创建用户 -> 出现在列表 -> 停用 -> 启用。"""
+    c = _setup_admin(isolated_data)
+
+    assert c.post('/AdminX/api/users', json={'username': 'bob', 'password': 'secret1'}).status_code == 200
+    users = c.get('/AdminX/api/users').get_json()['users']
+    bob = next(u for u in users if u['username'] == 'bob')
+    assert bob['role'] == 'user'
+    assert bob['enabled'] is True
+
+    assert c.post('/AdminX/api/users/%s/toggle' % bob['id']).status_code == 200
+    users = c.get('/AdminX/api/users').get_json()['users']
+    bob = next(u for u in users if u['username'] == 'bob')
+    assert bob['enabled'] is False
+
+    assert c.post('/AdminX/api/users/%s/toggle' % bob['id']).status_code == 200
+    users = c.get('/AdminX/api/users').get_json()['users']
+    assert next(u for u in users if u['username'] == 'bob')['enabled'] is True
+
+
+def test_admin_password_is_masked(isolated_data):
+    """概览接口必须脱敏，不能把 api_key / headers 明文交出去。"""
+    c = _setup_admin(isolated_data)
+    cfg = c.get('/AdminX/api/config').get_json()
+    assert cfg['models']
+    for m in cfg['models']:
+        assert m['api_key'] in ('********', '', None)
+    for s in cfg['mcp']:
+        assert s['headers'] in ('********', {}, None)
+
+
+def test_admin_endpoints_reject_non_admin(isolated_data):
+    """普通用户访问管理接口必须 403。"""
+    c = _setup_admin(isolated_data)
+    assert c.post('/AdminX/api/users', json={'username': 'eve', 'password': 'secret1'}).status_code == 200
+    c.post('/logout')
+    assert c.post('/login', data={'username': 'eve', 'password': 'secret1'}).status_code == 302
+
+    assert c.get('/AdminX').status_code == 403
+    assert c.get('/AdminX/api/users').status_code == 403
+    assert c.post('/AdminX/api/users', json={'username': 'x', 'password': 'secret1'}).status_code == 403
+    assert c.get('/AdminX/api/config').status_code == 403
+    assert c.get('/AdminX/api/settings').status_code == 403
+
+
+def test_json_store_write_holds_lock(isolated_data):
+    """write 的 mkstemp + os.replace 必须在锁内，否则并发保存会丢更新。
+
+    直接测不变量：持锁期间调用 write 必须阻塞，而不是抢先完成。
+    """
+    import threading
+    import app.services.json_store as store
+
+    held = threading.Event()
+    release = threading.Event()
+
+    def holder():
+        with store.L:
+            held.set()
+            release.wait(5)
+
+    t = threading.Thread(target=holder)
+    t.start()
+    assert held.wait(5)
+
+    finished = []
+
+    def writer():
+        store.save_data('lock.json', {'ok': True})
+        finished.append(True)
+
+    w = threading.Thread(target=writer)
+    w.start()
+    w.join(0.3)
+    # 锁被占用时写入不得完成
+    assert finished == [], 'write() 没有等待锁，并发保存会互相覆盖'
+    release.set()
+    w.join(5)
+    t.join(5)
+    assert finished == [True]
+    assert store.data('lock.json', None) == {'ok': True}
+
+
+def test_json_store_write_leaves_no_temp_file_on_error(isolated_data):
+    """序列化失败时不能残留 mkstemp 临时文件。"""
+    import app.services.json_store as store
+
+    class Unserializable:
+        pass
+
+    with pytest.raises(TypeError):
+        store.save_data('bad.json', {'x': Unserializable()})
+
+    leftovers = [f for f in os.listdir(str(isolated_data / 'data')) if f.startswith('tmp')]
+    assert leftovers == []
+
+
+@pytest.mark.parametrize('url,needles', [
+    ('/chat', ['chat-layout', 'composer', 'messages', 'chat_stream.js']),
+    ('/settings', ['settings-menu']),
+    ('/settings/models', ['模型 API', 'id="models"']),
+    ('/settings/mcp', ['MCP 服务', 'test-mcp']),
+    ('/settings/appearance', ['个性化设置']),
+    ('/settings/password', ['修改密码']),
+    ('/settings/skills', ['Skill']),
+    ('/AdminX', ['用户管理', '运行配置概览', 'cfg-mcp']),
+])
+def test_pages_render_required_elements(isolated_data, url, needles):
+    """每个页面都要渲染出核心元素，防止模板改动把页面改空。"""
+    c = _setup_admin(isolated_data)
+    r = c.get(url)
+    assert r.status_code == 200, url
+    html = r.data.decode('utf-8')
+    missing = [n for n in needles if n not in html]
+    assert not missing, '%s 缺少元素: %s' % (url, missing)
+
+
+def test_stylesheet_is_well_formed(isolated_data):
+    """样式表括号必须配平，且覆盖层变量已生效。"""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'terminal.css')
+    css = open(path, encoding='utf-8').read()
+    assert css.count('{') == css.count('}')
+    assert '--zj-accent' in css
+    assert ':focus-visible' in css
+    # 基础可访问性：必须声明视口与减少动效偏好
+    assert 'prefers-reduced-motion' in css
