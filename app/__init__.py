@@ -57,6 +57,10 @@ def create_app():
     @app.before_request
     def gate():
         if not initialized() and not (request.path == '/login' or request.path == '/setup' or request.path.startswith('/setup/')) and not request.path.startswith('/static'): return redirect('/setup')
+        # API 未登录应返回 401 而不是 302：fetch 跟随重定向后拿到的是登录页 HTML，
+        # 前端的 r.json() 会抛 SyntaxError，错误信息被搅成无法理解的解析异常。
+        if request.path.startswith('/api/') and not session.get('user',{}).get('id'):
+            return jsonify(error='未登录'), 401
     def uid(): return session.get('user',{}).get('id')
     def admin(): return session.get('user',{}).get('role')=='admin'
     @app.route('/')
@@ -261,7 +265,11 @@ def create_app():
             return jsonify(session_id=s['id'],message=answer)
         except Exception as e:return jsonify(error=str(e),session_id=s['id']),502
     @app.get('/AdminX')
-    def admin_page(): return render_template('admin.html',user=session['user']) if admin() else ('无权限',403)
+    def admin_page():
+        # 未登录应跳登录页；已登录但非管理员才返回 403（否则用户看到裸「无权限」不知道要登录）
+        if not uid(): return redirect('/login')
+        if not admin(): return render_template('message.html', title='无权限', message='当前账户不是管理员。'), 403
+        return render_template('admin.html',user=session['user'])
     @app.get('/AdminX/api/users')
     def admin_users(): return jsonify(users=[public_user(u) for u in users()]) if admin() else (jsonify(error='无权限'),403)
     @app.post('/AdminX/api/users')

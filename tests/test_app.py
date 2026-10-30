@@ -766,3 +766,23 @@ def test_markdown_placeholder_cannot_be_injected():
     body = m.group(1)
     # 必须在拼接前剥掉用户文本里的 NUL
     assert "replace(/\\x00/g, '')" in body
+
+
+def test_api_returns_401_not_redirect_when_logged_out(isolated_data):
+    """API 未登录必须返回 401；302 会让 fetch 拿到登录页 HTML，r.json() 抛解析错误。"""
+    c = _setup_admin(isolated_data)
+    c.post('/logout')
+    for url in ('/api/sessions', '/api/models', '/api/skills', '/api/mcp/tools', '/api/mcp/diagnostics'):
+        r = c.get(url)
+        assert r.status_code == 401, '%s 返回 %s' % (url, r.status_code)
+        assert r.is_json and r.get_json()['error'] == '未登录'
+
+
+def test_pages_still_redirect_when_logged_out(isolated_data):
+    """页面仍应跳转登录页，不返回 JSON。"""
+    c = _setup_admin(isolated_data)
+    c.post('/logout')
+    for url in ('/chat', '/settings', '/AdminX'):
+        r = c.get(url)
+        assert r.status_code in (301, 302), '%s 返回 %s' % (url, r.status_code)
+        assert not r.is_json
