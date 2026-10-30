@@ -809,3 +809,109 @@ def test_setup_retry_after_partial_failure(isolated_data):
     assert r.status_code == 302, r.data.decode('utf-8')[:300]
     # 只应有一个 admin
     assert sum(1 for u in auth.users() if u['username'] == 'admin') == 1
+
+
+def _write_models_config(models_list):
+    import app.services.json_store as store
+    store.save_config('models.json', {'models': models_list})
+
+
+def test_setup_can_skip_api_step_when_config_has_models(isolated_data):
+    """config/models.json 预置模型时，向导第 3 步可留空跳过。"""
+    app = _fresh_app(str(isolated_data))
+    _write_models_config([{
+        'id': 'cfg', 'name': '配置文件模型', 'base_url': 'http://x/v1',
+        'api_key': 'sk-config', 'model': 'm1', 'enabled': True, 'default': True,
+    }])
+    c = app.test_client()
+    c.get('/setup')
+    c.post('/setup/2', data={'username': 'admin', 'password': 'password', 'confirm': 'password'})
+
+    # 第 3 步什么都不填
+    r = c.post('/setup/3', data={})
+    assert r.status_code == 302, '应允许跳过，实际渲染了错误页'
+
+    r = c.post('/setup/4', data={'site_name': 'Z'})
+    assert r.status_code == 302
+
+    # 配置文件里的模型必须保留，不能被空列表覆盖
+    import app.services.json_store as store
+    saved = store.config('models.json', {}).get('models', [])
+    assert len(saved) == 1
+    assert saved[0]['api_key'] == 'sk-config'
+
+
+def test_setup_still_requires_api_when_config_empty(isolated_data):
+    """没有任何配置时，第 3 步仍必须填。"""
+    app = _fresh_app(str(isolated_data))
+    c = app.test_client()
+    c.get('/setup')
+    c.post('/setup/2', data={'username': 'admin', 'password': 'password', 'confirm': 'password'})
+    r = c.post('/setup/3', data={})
+    assert r.status_code == 200
+    assert '请至少配置一个 API' in r.data.decode('utf-8')
+
+
+def test_config_file_models_visible_after_setup(isolated_data):
+    """预置在配置文件里的模型，安装完成后应出现在 /api/models。"""
+    app = _fresh_app(str(isolated_data))
+    _write_models_config([{
+        'id': 'cfg', 'name': '配置文件模型', 'base_url': 'http://x/v1',
+        'api_key': 'sk-config', 'model': 'm1', 'enabled': True, 'default': True,
+    }])
+    c = app.test_client()
+    c.get('/setup')
+    c.post('/setup/2', data={'username': 'admin', 'password': 'password', 'confirm': 'password'})
+    c.post('/setup/3', data={})
+    c.post('/setup/4', data={'site_name': 'Z'})
+    c.post('/login', data={'username': 'admin', 'password': 'password'})
+
+    r = c.get('/api/models')
+    assert r.status_code == 200
+    names = [m['name'] for m in r.get_json()['models']]
+    assert '配置文件模型' in names
+
+
+def test_setup_keeps_configured_mcp_servers(isolated_data):
+    """config/mcp.json 已配置服务时，向导留空不得覆盖成空条目。"""
+    import app.services.json_store as store
+
+    app = _fresh_app(str(isolated_data))
+    _write_models_config([{
+        'id': 'cfg', 'name': 'M', 'base_url': 'http://x/v1',
+        'api_key': 'k', 'model': 'm1', 'enabled': True, 'default': True,
+    }])
+    store.save_config('mcp.json', {'servers': [
+        {'id': 'filesystem', 'name': '文件系统', 'protocol': 'streamable_http',
+         'url': 'http://127.0.0.1:9000/mcp', 'enabled': True, 'verify_ssl': True, 'headers': {}},
+    ]})
+
+    c = app.test_client()
+    c.get('/setup')
+    c.post('/setup/2', data={'username': 'admin', 'password': 'password', 'confirm': 'password'})
+    c.post('/setup/3', data={})
+    c.post('/setup/4', data={'site_name': 'Z'})
+
+    saved = store.config('mcp.json', {})['servers']
+    assert len(saved) == 1
+    assert saved[0]['id'] == 'filesystem'
+    assert saved[0]['url'] == 'http://127.0.0.1:9000/mcp'
+
+
+def test_setup_writes_mcp_when_config_empty(isolated_data):
+    """配置为空时，向导填的 MCP 地址要正常写入。"""
+    import app.services.json_store as store
+
+    app = _fresh_app(str(isolated_data))
+    c = app.test_client()
+    c.get('/setup')
+    c.post('/setup/2', data={'username': 'admin', 'password': 'password', 'confirm': 'password'})
+    c.post('/setup/3', data={
+        'api_name[]': ['l'], 'api_base_url[]': ['http://x/v1'],
+        'api_key[]': ['k'], 'api_model[]': ['m'],
+    })
+    c.post('/setup/4', data={'site_name': 'Z', 'mcp_url': 'http://y/mcp'})
+
+    saved = store.config('mcp.json', {})['servers']
+    assert saved[0]['url'] == 'http://y/mcp'
+    assert saved[0]['enabled'] is True

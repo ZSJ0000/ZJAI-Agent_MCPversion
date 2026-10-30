@@ -49,6 +49,22 @@ def _safe_mcp():
         item['headers_configured']=bool(headers); item['oauth_enabled']=bool(s.get('oauth_enabled', bool(headers.get('Authorization')))); item.pop('headers',None); result.append(item)
     return result
 
+def _config_has_models():
+    """配置文件里是否已有可用模型（可在部署时预先写好 config/models.json）。"""
+    for m in models():
+        if isinstance(m, dict) and m.get('base_url') and m.get('model'):
+            return True
+    return False
+
+
+def _config_has_servers():
+    """配置文件里是否已有可用的 MCP 服务。"""
+    for s in config('mcp.json', {'servers': []}).get('servers', []):
+        if isinstance(s, dict) and s.get('url'):
+            return True
+    return False
+
+
 def _finish_setup(values):
     """安装向导最后一步：建管理员、写 models/mcp/app 配置、落 install.lock。
 
@@ -63,31 +79,36 @@ def _finish_setup(values):
         create_user(username, values['password'], 'admin')
 
     api_list = values.get('apis', [])
-    save_config('models.json', {'models': [
-        {
-            'id': 'api-' + str(i + 1),
-            'name': x['name'],
-            'base_url': x['url'],
-            'api_key': x['key'],
-            'model': x['model'],
-            'enabled': True,
-            'default': i == 0,
-        }
-        for i, x in enumerate(api_list)
-    ]})
+    # 向导里没填模型时，保留配置文件已有的模型，不能用空数组覆盖
+    if api_list or not _config_has_models():
+        save_config('models.json', {'models': [
+            {
+                'id': 'api-' + str(i + 1),
+                'name': x['name'],
+                'base_url': x['url'],
+                'api_key': x['key'],
+                'model': x['model'],
+                'enabled': True,
+                'default': i == 0,
+            }
+            for i, x in enumerate(api_list)
+        ]})
 
-    headers = {}
-    if values.get('mcp_token'):
-        headers['Authorization'] = 'Bearer ' + values['mcp_token']
-    save_config('mcp.json', {'servers': [{
-        'id': 'default',
-        'name': '默认 MCP',
-        'protocol': values['mcp_protocol'],
-        'url': values['mcp_url'],
-        'enabled': bool(values['mcp_url']),
-        'verify_ssl': True,
-        'headers': headers,
-    }]})
+    # 向导里没填 MCP 地址时，保留配置文件已有的服务，不要盖成空条目
+    mcp_url = values.get('mcp_url') or ''
+    if mcp_url or not _config_has_servers():
+        headers = {}
+        if values.get('mcp_token'):
+            headers['Authorization'] = 'Bearer ' + values['mcp_token']
+        save_config('mcp.json', {'servers': [{
+            'id': 'default',
+            'name': '默认 MCP',
+            'protocol': values['mcp_protocol'],
+            'url': mcp_url,
+            'enabled': bool(mcp_url),
+            'verify_ssl': True,
+            'headers': headers,
+        }]})
 
     skin = values['theme'] if values['theme'] in KNOWN_SKINS else DEFAULT_SKIN
     save_config('app.json', {
@@ -130,7 +151,8 @@ def create_app():
             elif step==3:
                 names=request.form.getlist('api_name[]'); urls=request.form.getlist('api_base_url[]'); keys=request.form.getlist('api_key[]'); mids=request.form.getlist('api_model[]')
                 apis=[{'name':names[i] if i<len(names) else 'API '+str(i+1),'url':urls[i].strip(),'key':keys[i] if i<len(keys) else '','model':mids[i] if i<len(mids) else ''} for i in range(len(urls)) if urls[i].strip()]
-                if not apis: error='请至少配置一个 API'
+                # 配置文件里已有模型时允许空提交跳过：此时保留 config/models.json，不清空
+                if not apis and not _config_has_models(): error='请至少配置一个 API'
                 else: values['apis']=apis; session['setup_values']=values
             elif step==4:
                 values.update({

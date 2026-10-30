@@ -91,6 +91,26 @@ python run.py
 
 `skin` 与 `theme` 互为别名，取值为 `terminal` 或 `aurora`。
 
+### 预置配置（跳过向导填写）
+
+可以先把 `config/models.json` 和 `config/mcp.json` 写好再启动，向导里对应的步骤
+（第 3 步模型 API、第 4 步 MCP 地址）**留空即可跳过**，已有配置不会被覆盖。
+
+适合批量部署：提前铺好配置文件，安装时只创建管理员账号。
+
+```bash
+mkdir -p config
+cp config/models.example.json config/models.json
+cp config/mcp.example.json config/mcp.json
+# 按需编辑两个文件，填入真实地址与密钥
+python run.py
+```
+
+只需满足至少一条有效模型（`base_url` 与 `model` 均非空）。配置文件里的模型会
+直接出现在「设置中心 → 模型 API」中。
+
+> 配置文件在每次请求时实时读取，改完无需重启。
+
 ### 配置 MCP 服务
 
 在「设置中心 → MCP 服务」中填写，或直接编辑 `config/mcp.json`：
