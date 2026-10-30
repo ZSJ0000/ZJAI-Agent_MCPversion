@@ -1,6 +1,8 @@
+config/*.json
+data/install.lock
+data/*.json
+.env
 __pycache__/
 *.py[cod]
 .venv/
-config/*.json
-data/*.json
-data/install.lock
+venv/

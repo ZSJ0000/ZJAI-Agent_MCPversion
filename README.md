@@ -20,11 +20,42 @@
 
 ## 快速开始
 
-### Windows
+### 一键安装（推荐）
 
-双击 `run.bat`，它会自动安装依赖并启动。
+**Linux / macOS**
 
-### Linux / macOS
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSJ0000/ZJAI-Agent_MCPversion/main/install.sh | bash
+```
+
+国内网络加速：
+
+```bash
+curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/ZSJ0000/ZJAI-Agent_MCPversion/main/install.sh   | ZJAI_MIRROR=https://ghfast.top/ bash
+```
+
+脚本会：检测 Python → 克隆到 `~/ZJAI-Agent` → 建虚拟环境 → 装依赖 → 生成随机密钥 → 打印启动命令。
+重复执行即更新代码，`config/` 与 `.env` 不会被覆盖。
+
+可用环境变量：
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `ZJAI_DIR` | `~/ZJAI-Agent` | 安装目录 |
+| `ZJAI_PORT` | `5000` | 监听端口 |
+| `ZJAI_BRANCH` | `main` | 分支 |
+| `ZJAI_MIRROR` | 空 | Git 代理前缀 |
+| `ZJAI_YES` | `0` | 设为 `1` 则装完直接启动 |
+
+**Windows**
+
+双击 `start.bat`，自动建虚拟环境、装依赖、生成密钥并启动。之后每次双击即启动。
+
+### 手动安装
+
+**Windows**：双击 `run.bat`（每次都会检查依赖）。
+
+**Linux / macOS**
 
 ```bash
 python3 -m pip install -r requirements.txt
