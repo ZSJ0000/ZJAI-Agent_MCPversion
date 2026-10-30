@@ -34,9 +34,23 @@ _NS_SEP = '__'
 _SESSION_TTL = 300
 _TOOLS_TTL = 300
 
+# 缓存条目上限。改配置会换 key，若不设上限，反复改配置会让缓存无限增长。
+_MAX_CACHE_ENTRIES = 64
+
 _SESSION_CACHE = {}
 _TOOLS_CACHE = {}
 _CACHE_LOCK = threading.RLock()
+
+
+def _prune_cache(cache, now):
+    """清掉过期条目；若仍超上限，按过期时间淘汰最旧的。调用方需持锁。"""
+    expired = [k for k, v in cache.items() if (v or {}).get('expires_at', 0) <= now]
+    for k in expired:
+        cache.pop(k, None)
+    if len(cache) > _MAX_CACHE_ENTRIES:
+        keep = sorted(cache.items(), key=lambda kv: (kv[1] or {}).get('expires_at', 0))
+        for k, _ in keep[:len(cache) - _MAX_CACHE_ENTRIES]:
+            cache.pop(k, None)
 
 
 def _proto(server):
@@ -164,6 +178,7 @@ def _get_session(server):
             'stateless': sid is None,
             'expires_at': now + _SESSION_TTL,
         }
+        _prune_cache(_SESSION_CACHE, now)
     return sid, False, True
 
 def _looks_like_session_expired(text):
@@ -236,6 +251,7 @@ def _get_server_tools(server, force_refresh=False):
                 'tools': copy.deepcopy(copied_tools),
                 'expires_at': now + _TOOLS_TTL,
             }
+            _prune_cache(_TOOLS_CACHE, now)
 
     return copy.deepcopy(copied_tools)
 

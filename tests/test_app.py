@@ -704,3 +704,44 @@ def test_retry_closes_failed_response(isolated_data):
         assert len(closed) == ms.API_RETRIES - 1, closed
     finally:
         ms.requests.post, ms.time.sleep = original_post, original_sleep
+
+
+def test_cache_is_bounded(mcp):
+    """反复改配置会不断产生新 key，缓存必须有上限，否则无限增长。"""
+    now = 1000
+    with mcp._CACHE_LOCK:
+        for i in range(mcp._MAX_CACHE_ENTRIES + 40):
+            mcp._TOOLS_CACHE[('id-%d' % i, 'http://x', 'streamable_http')] = {
+                'tools': [], 'expires_at': now + i,
+            }
+        mcp._prune_cache(mcp._TOOLS_CACHE, now)
+        assert len(mcp._TOOLS_CACHE) <= mcp._MAX_CACHE_ENTRIES
+
+
+def test_prune_removes_expired_entries(mcp):
+    now = 2000
+    with mcp._CACHE_LOCK:
+        mcp._SESSION_CACHE[('old', 'http://x', 'streamable_http')] = {'session_id': 'a', 'expires_at': now - 1}
+        mcp._SESSION_CACHE[('new', 'http://x', 'streamable_http')] = {'session_id': 'b', 'expires_at': now + 100}
+        mcp._prune_cache(mcp._SESSION_CACHE, now)
+        assert ('old', 'http://x', 'streamable_http') not in mcp._SESSION_CACHE
+        assert ('new', 'http://x', 'streamable_http') in mcp._SESSION_CACHE
+
+
+def test_skills_are_sorted_and_tolerate_broken_files(isolated_data, monkeypatch, tmp_path):
+    """技能按文件名排序；单个坏文件不应让整个列表变空。"""
+    import app.services.skill_service as sk
+
+    # 用临时目录，避免污染仓库的 skills/
+    SKILLS_DIR = str(tmp_path / 'skills')
+    monkeypatch.setattr(sk, 'SKILLS_DIR', SKILLS_DIR)
+    os.makedirs(SKILLS_DIR, exist_ok=True)
+    for name, text in (('b.md', 'B'), ('a.md', 'A'), ('c.md', 'C')):
+        with open(os.path.join(SKILLS_DIR, name), 'w', encoding='utf-8') as f:
+            f.write(text)
+    # 写一个非法 UTF-8 文件
+    with open(os.path.join(SKILLS_DIR, 'bad.md'), 'wb') as f:
+        f.write(b'\xff\xfe\x00bad')
+
+    names = [s['name'] for s in sk.load_skills()]
+    assert names == ['a', 'b', 'c']  # 坏文件被跳过，其余按名排序
