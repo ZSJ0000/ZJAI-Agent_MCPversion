@@ -1,6 +1,8 @@
 import uuid, datetime
 from .json_store import data, save_data
-def now(): return datetime.datetime.utcnow().replace(microsecond=0).isoformat()+'Z'
+# utcnow() 在 3.12+ 弃用；但 datetime.UTC 是 3.11+ 才有，这里用 timezone.utc 兼容 3.8。
+# 输出形状不变（仍是不带时区的 UTC 时间 + 'Z'），不影响已有数据的比较。
+def now(): return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None, microsecond=0).isoformat()+'Z'
 def all_sessions(): return data('sessions.json',[])
 def messages(): return data('messages.json',[])
 def create(owner_id,title='新会话'):
