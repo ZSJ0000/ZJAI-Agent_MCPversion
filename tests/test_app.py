@@ -606,3 +606,101 @@ def test_request_body_limit_is_configured(isolated_data):
     app = _fresh_app(str(isolated_data))
     assert app.config.get('MAX_CONTENT_LENGTH')
     assert app.config['MAX_CONTENT_LENGTH'] <= 64 * 1024 * 1024
+
+
+def test_saving_models_keeps_existing_api_key(isolated_data):
+    """保存模型配置时，前端回传的掩码不得覆盖真实 key。"""
+    c = _setup_admin(isolated_data)
+    r = c.put('/AdminX/api/models', json={'models': [
+        {'id': 'api-1', 'name': 'A', 'base_url': 'http://x/v1', 'model': 'm1', 'api_key': 'sk-real'},
+    ]})
+    assert r.status_code == 200
+
+    # 前端把掩码原样传回来，应保留原 key
+    r = c.put('/AdminX/api/models', json={'models': [
+        {'id': 'api-1', 'name': 'A', 'base_url': 'http://x/v1', 'model': 'm1', 'api_key': '********'},
+    ]})
+    assert r.status_code == 200
+
+    import app.services.json_store as store
+    saved = store.config('models.json', {}).get('models', [])
+    assert saved[0]['api_key'] == 'sk-real'
+
+
+def test_saving_mcp_keeps_existing_token(isolated_data):
+    c = _setup_admin(isolated_data)
+    r = c.put('/AdminX/api/mcp', json={'servers': [
+        {'id': 's1', 'name': 'S', 'protocol': 'streamable_http', 'url': 'http://x/mcp', 'headers': {'Authorization': 'Bearer tok'}},
+    ]})
+    assert r.status_code == 200
+
+    r = c.put('/AdminX/api/mcp', json={'servers': [
+        {'id': 's1', 'name': 'S', 'protocol': 'streamable_http', 'url': 'http://x/mcp', 'headers': {}},
+    ]})
+    assert r.status_code == 200
+
+    import app.services.json_store as store
+    saved = store.config('mcp.json', {})['servers']
+    # 留空表示"保留原值"，原样存回（含 Bearer 前缀）
+    assert saved[0]['headers'].get('Authorization') == 'Bearer tok'
+
+
+def test_models_default_is_always_set(isolated_data):
+    """没有任何模型标记 default 时，第一个要自动成为默认。"""
+    c = _setup_admin(isolated_data)
+    c.put('/AdminX/api/models', json={'models': [
+        {'name': 'A', 'base_url': 'http://x/v1', 'model': 'm1'},
+        {'name': 'B', 'base_url': 'http://y/v1', 'model': 'm2'},
+    ]})
+    import app.services.json_store as store
+    saved = store.config('models.json', {})['models']
+    assert sum(1 for m in saved if m['default']) == 1
+    assert saved[0]['default'] is True
+
+
+def test_streaming_request_is_not_retried(isolated_data):
+    """流式请求不能重试：已开始消费的响应无法重放，重试会重复计费。"""
+    import app.services.model_service as ms
+
+    calls = []
+
+    class FakeResp:
+        status_code = 503
+        def close(self): pass
+
+    def fake_post(url, **kwargs):
+        calls.append(kwargs.get('stream'))
+        return FakeResp()
+
+    original = ms.requests.post
+    ms.requests.post = fake_post
+    try:
+        resp = ms._post_with_retry('http://x', stream=True)
+        assert resp.status_code == 503
+        assert calls == [True], '流式请求应只发一次，实际: %r' % calls
+
+        calls.clear()
+        resp = ms._post_with_retry('http://x')
+        assert len(calls) == ms.API_RETRIES, '非流式请求应重试 %d 次，实际 %d' % (ms.API_RETRIES, len(calls))
+    finally:
+        ms.requests.post = original
+
+
+def test_retry_closes_failed_response(isolated_data):
+    """重试前必须关闭上一个响应，否则连接被占用。"""
+    import app.services.model_service as ms
+
+    closed = []
+
+    class FakeResp:
+        status_code = 500
+        def close(self): closed.append(True)
+
+    original_post, original_sleep = ms.requests.post, ms.time.sleep
+    ms.requests.post = lambda url, **kw: FakeResp()
+    ms.time.sleep = lambda s: None
+    try:
+        ms._post_with_retry('http://x')
+        assert len(closed) == ms.API_RETRIES - 1, closed
+    finally:
+        ms.requests.post, ms.time.sleep = original_post, original_sleep

@@ -305,10 +305,22 @@ def create_app():
         if not admin():return jsonify(error='无权限'),403
         payload=request.get_json(silent=True) or {}; incoming=payload.get('models',[])
         if not isinstance(incoming,list):return jsonify(error='models 必须是数组'),400
+        # 原有模型一次性取出建立索引，避免在循环里反复读磁盘
+        existing={str(old.get('id')): old for old in models()}
         clean=[]
         for i,m in enumerate(incoming):
             if not isinstance(m,dict) or not m.get('base_url') or not m.get('model'):continue
-            clean.append({'id':str(m.get('id') or 'api-'+str(i+1)),'name':str(m.get('name') or 'API '+str(i+1)),'base_url':str(m['base_url']).strip(),'api_key':_keep_or_replace(m.get('api_key'), next((old.get('api_key','') for old in models() if old.get('id')==m.get('id')), '')),'model':str(m['model']).strip(),'enabled':bool(m.get('enabled',True)),'default':bool(m.get('default',i==0))})
+            model_id=str(m.get('id') or 'api-'+str(i+1))
+            old=existing.get(model_id, {})
+            clean.append({
+                'id':model_id,
+                'name':str(m.get('name') or 'API '+str(i+1)),
+                'base_url':str(m['base_url']).strip(),
+                'api_key':_keep_or_replace(m.get('api_key'), old.get('api_key','')),
+                'model':str(m['model']).strip(),
+                'enabled':bool(m.get('enabled',True)),
+                'default':bool(m.get('default',i==0)),
+            })
         if clean and not any(m['default'] for m in clean):clean[0]['default']=True
         save_config('models.json',{'models':clean});return jsonify(success=True,models=_safe_models())
 
@@ -317,13 +329,29 @@ def create_app():
         if not admin():return jsonify(error='无权限'),403
         payload=request.get_json(silent=True) or {}; incoming=payload.get('servers',[])
         if not isinstance(incoming,list):return jsonify(error='servers 必须是数组'),400
+        existing={str(old.get('id')): old for old in config('mcp.json',{'servers':[]}).get('servers',[])}
         clean=[]
         for i,item in enumerate(incoming):
             if not isinstance(item,dict) or not item.get('url'):continue
             protocol=item.get('protocol','streamable_http')
             if protocol not in ('streamable_http','sse'):return jsonify(error='MCP 协议无效'),400
-            incoming_headers=item.get('headers') if isinstance(item.get('headers'),dict) else {}; incoming_token=incoming_headers.get('Authorization',''); old_item=next((old for old in config('mcp.json',{'servers':[]}).get('servers',[]) if old.get('id')==item.get('id')), {}); old_headers=old_item.get('headers',{}) or {}; old_token=old_headers.get('Authorization',''); headers={'Authorization':_keep_or_replace(incoming_token,old_token)} if (incoming_token or old_token) else {}; oauth_enabled=bool(item.get('oauth_enabled', bool(headers.get('Authorization'))))
-            clean.append({'id':str(item.get('id') or 'mcp-'+str(i+1)),'name':str(item.get('name') or 'MCP '+str(i+1)),'protocol':protocol,'url':str(item['url']).strip(),'enabled':bool(item.get('enabled',True)),'oauth_enabled':oauth_enabled,'verify_ssl':bool(item.get('verify_ssl',True)),'headers':headers})
+            server_id=str(item.get('id') or 'mcp-'+str(i+1))
+            incoming_headers=item.get('headers') if isinstance(item.get('headers'),dict) else {}
+            incoming_token=incoming_headers.get('Authorization','')
+            old=existing.get(server_id, {})
+            old_token=(old.get('headers') or {}).get('Authorization','')
+            token=_keep_or_replace(incoming_token, old_token)
+            headers={'Authorization':token} if token else {}
+            clean.append({
+                'id':server_id,
+                'name':str(item.get('name') or 'MCP '+str(i+1)),
+                'protocol':protocol,
+                'url':str(item['url']).strip(),
+                'enabled':bool(item.get('enabled',True)),
+                'oauth_enabled':bool(item.get('oauth_enabled', bool(token))),
+                'verify_ssl':bool(item.get('verify_ssl',True)),
+                'headers':headers,
+            })
         save_config('mcp.json',{'servers':clean})
         invalidate_all_cache()
         return jsonify(success=True,mcp=_safe_mcp())

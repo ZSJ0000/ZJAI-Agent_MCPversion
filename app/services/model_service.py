@@ -18,24 +18,36 @@ from .skill_service import load_skills
 API_RETRIES = 3
 
 def _post_with_retry(url, **kwargs):
+    """带退避重试的 POST。
+
+    stream=True 时不重试：流式响应一旦开始读取就无法重放，重试会重复消耗额度；
+    且未关闭的流式响应会泄漏连接，因此在返回前不能丢下它继续下一轮。
+    """
     last = None
     retry_statuses = (408, 429, 500, 502, 503, 504)
-    for attempt in range(API_RETRIES):
+    streaming = bool(kwargs.get('stream'))
+    attempts = 1 if streaming else API_RETRIES
+    for attempt in range(attempts):
         try:
             response = requests.post(url, **kwargs)
-            if response.status_code in retry_statuses and attempt + 1 < API_RETRIES:
+            if response.status_code in retry_statuses and attempt + 1 < attempts:
+                # 重试前必须释放连接，否则 keep-alive 连接会被占住
+                try:
+                    response.close()
+                except Exception:
+                    pass
                 time.sleep(1 + attempt)
                 continue
             return response
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
             last = exc
-            if attempt + 1 < API_RETRIES:
+            if attempt + 1 < attempts:
                 time.sleep(1 + attempt)
                 continue
             raise
     if last:
         raise last
-    raise requests.exceptions.RequestException('AI API 请求失败，已重试 %s 次' % API_RETRIES)
+    raise requests.exceptions.RequestException('AI API 请求失败，已重试 %s 次' % attempts)
 
 def _json_objects(text):
     """Extract complete balanced JSON objects from model text."""
