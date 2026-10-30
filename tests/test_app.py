@@ -786,3 +786,26 @@ def test_pages_still_redirect_when_logged_out(isolated_data):
         r = c.get(url)
         assert r.status_code in (301, 302), '%s 返回 %s' % (url, r.status_code)
         assert not r.is_json
+
+
+def test_setup_retry_after_partial_failure(isolated_data):
+    """建用户成功但写配置失败后重试，不应卡在"用户名已存在"。"""
+    import app.services.auth_service as auth
+
+    app = _fresh_app(str(isolated_data))
+    c = app.test_client()
+    c.get('/setup')
+    c.post('/setup/2', data={'username': 'admin', 'password': 'password', 'confirm': 'password'})
+    c.post('/setup/3', data={
+        'api_name[]': ['l'], 'api_base_url[]': ['http://x/v1'],
+        'api_key[]': ['k'], 'api_model[]': ['m'],
+    })
+
+    # 模拟"上次建用户成功但写配置失败"留下的状态
+    auth.create_user('admin', 'password', 'admin')
+    assert any(u['username'] == 'admin' for u in auth.users())
+
+    r = c.post('/setup/4', data={'site_name': 'Z'})
+    assert r.status_code == 302, r.data.decode('utf-8')[:300]
+    # 只应有一个 admin
+    assert sum(1 for u in auth.users() if u['username'] == 'admin') == 1

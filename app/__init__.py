@@ -49,9 +49,60 @@ def _safe_mcp():
         item['headers_configured']=bool(headers); item['oauth_enabled']=bool(s.get('oauth_enabled', bool(headers.get('Authorization')))); item.pop('headers',None); result.append(item)
     return result
 
+def _finish_setup(values):
+    """安装向导最后一步：建管理员、写 models/mcp/app 配置、落 install.lock。
+
+    这里刻意把建用户放在最前、install.lock 放在最后，并在重试时容错：
+    若上一次建用户成功但后续写配置失败，用户重提时不能卡在“用户名已存在”。
+    """
+    from .services.json_store import write
+    from .config import DATA_DIR
+
+    username = values['username']
+    if not any(u.get('username') == username for u in users()):
+        create_user(username, values['password'], 'admin')
+
+    api_list = values.get('apis', [])
+    save_config('models.json', {'models': [
+        {
+            'id': 'api-' + str(i + 1),
+            'name': x['name'],
+            'base_url': x['url'],
+            'api_key': x['key'],
+            'model': x['model'],
+            'enabled': True,
+            'default': i == 0,
+        }
+        for i, x in enumerate(api_list)
+    ]})
+
+    headers = {}
+    if values.get('mcp_token'):
+        headers['Authorization'] = 'Bearer ' + values['mcp_token']
+    save_config('mcp.json', {'servers': [{
+        'id': 'default',
+        'name': '默认 MCP',
+        'protocol': values['mcp_protocol'],
+        'url': values['mcp_url'],
+        'enabled': bool(values['mcp_url']),
+        'verify_ssl': True,
+        'headers': headers,
+    }]})
+
+    skin = values['theme'] if values['theme'] in KNOWN_SKINS else DEFAULT_SKIN
+    save_config('app.json', {
+        'name': values['site_name'],
+        'skin': skin,
+        'theme': skin,
+        'welcome_message': values['welcome_message'],
+        'initialized': True,
+    })
+
+    write(os.path.join(DATA_DIR, 'install.lock'), {'initialized': True})
+
+
 def create_app():
-    app=Flask(__name__,template_folder='../templates',static_folder='../static'); app.secret_key=SECRET_KEY; ensure_dirs()
-    # 请求体上限：默认 32MB（10MB 附件经 base64 膨胀后约 13.3MB，留出余量给多附件）。
+    app=Flask(__name__,template_folder='../templates',static_folder='../static'); app.secret_key=SECRET_KEY; ensure_dirs()    # 请求体上限：默认 32MB（10MB 附件经 base64 膨胀后约 13.3MB，留出余量给多附件）。
     # 未设此值时客户端可绕过前端校验直接 POST 超大 payload 打爆内存。
     app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('ZJAI_MAX_BODY_MB', '32')) * 1024 * 1024
     @app.before_request
@@ -82,15 +133,19 @@ def create_app():
                 if not apis: error='请至少配置一个 API'
                 else: values['apis']=apis; session['setup_values']=values
             elif step==4:
-                values.update({'site_name':request.form.get('site_name','ZJAI-Agent_MCPversion'),'theme':request.form.get('theme','terminal'),'welcome_message':request.form.get('welcome_message','欢迎使用。'),'mcp_url':request.form.get('mcp_url','').strip(),'mcp_protocol':request.form.get('mcp_protocol','streamable_http'),'mcp_token':request.form.get('mcp_token','').strip()}); session['setup_values']=values
+                values.update({
+                    'site_name':request.form.get('site_name','ZJAI-Agent_MCPversion'),
+                    'theme':request.form.get('theme','terminal'),
+                    'welcome_message':request.form.get('welcome_message','欢迎使用。'),
+                    'mcp_url':request.form.get('mcp_url','').strip(),
+                    'mcp_protocol':request.form.get('mcp_protocol','streamable_http'),
+                    'mcp_token':request.form.get('mcp_token','').strip(),
+                })
+                session['setup_values']=values
                 try:
-                    create_user(values['username'],values['password'],'admin')
-                    save_config('models.json',{'models':[{'id':'api-'+str(i+1),'name':x['name'],'base_url':x['url'],'api_key':x['key'],'model':x['model'],'enabled':True,'default':i==0} for i,x in enumerate(values.get('apis',[]))]})
-                    headers={}
-                    if values.get('mcp_token'): headers['Authorization']='Bearer '+values['mcp_token']
-                    save_config('mcp.json',{'servers':[{'id':'default','name':'默认 MCP','protocol':values['mcp_protocol'],'url':values['mcp_url'],'enabled':bool(values['mcp_url']),'verify_ssl':True,'headers':headers}]})
-                    skin=values['theme'] if values['theme'] in KNOWN_SKINS else DEFAULT_SKIN
-                    save_config('app.json',{'name':values['site_name'],'skin':skin,'theme':skin,'welcome_message':values['welcome_message'],'initialized':True}); from .services.json_store import write; from .config import DATA_DIR; write(os.path.join(DATA_DIR,'install.lock'),{'initialized':True}); session.pop('setup_values',None); return redirect('/login')
+                    _finish_setup(values)
+                    session.pop('setup_values',None)
+                    return redirect('/login')
                 except Exception as e: error=str(e)
             if error: return render_template('setup_step.html',step=step,values=values,error=error)
             return redirect('/setup/'+str(step+1)) if step<4 else redirect('/login')
